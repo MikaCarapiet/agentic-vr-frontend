@@ -388,6 +388,8 @@
 .lnd-universe-row {
   display: grid;
   grid-template-columns: minmax(300px, 1.2fr) repeat(3, minmax(190px, 0.8fr));
+  grid-auto-rows: 154px;
+  align-items: stretch;
   gap: 14px;
 }
 
@@ -403,7 +405,7 @@
   display: grid;
   grid-template-columns: 170px minmax(0, 1fr);
   gap: 16px;
-  min-height: 124px;
+  height: 100%;
   padding: 10px;
   text-align: left;
 }
@@ -447,8 +449,9 @@
 }
 
 .lnd-premiere-copy {
-  align-content: center;
+  align-content: space-between;
   gap: 6px;
+  min-width: 0;
 }
 
 .lnd-premiere-copy span,
@@ -470,10 +473,20 @@
   line-height: 1.24;
 }
 
+.lnd-premiere-copy strong,
+.lnd-universe-card strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .lnd-universe-card {
-  align-content: space-between;
-  min-height: 124px;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  height: 100%;
   padding: 16px;
+  overflow: hidden;
   text-align: left;
 }
 
@@ -492,6 +505,7 @@
 }
 
 .lnd-universe-metric {
+  align-self: end;
   text-align: right;
 }
 
@@ -504,6 +518,7 @@
 
 .lnd-card-actions {
   display: flex;
+  align-self: end;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
@@ -600,6 +615,7 @@
   }
 
   .lnd-universe-row {
+    grid-auto-rows: auto;
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -659,6 +675,7 @@
 
   .lnd-universe-row,
   .lnd-premiere-card {
+    grid-auto-rows: auto;
     grid-template-columns: 1fr;
   }
 
