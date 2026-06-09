@@ -12,7 +12,7 @@ The frontend owns the viewer surface from the MVP architecture diagram:
 - agent trace display
 - fallback demo state while the AWS backend is still being built
 
-When `VITE_SCENEVERSE_API_BASE_URL` is set, the frontend calls the AWS FastAPI backend. When it is empty, the frontend uses built-in fallback responses with the same response shapes.
+By default, the frontend calls `/backend`, and Vercel rewrites that path to the deployed AWS FastAPI backend. For local backend testing, override `VITE_SCENEVERSE_API_BASE_URL`.
 
 ## Run locally
 
@@ -36,7 +36,13 @@ POST /api/chat
 Set the backend URL in Vercel or local env:
 
 ```bash
-VITE_SCENEVERSE_API_BASE_URL=https://your-aws-fastapi-url
+VITE_SCENEVERSE_API_BASE_URL=/backend
+```
+
+Current Vercel rewrite target:
+
+```text
+http://18.207.53.115
 ```
 
 ## Build
