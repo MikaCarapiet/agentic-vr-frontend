@@ -32,12 +32,6 @@ const COMING_SOON = [
   },
 ];
 
-const SCENE_PATHS = [
-  "Ask Vader why he refuses to yield.",
-  "Ask Yoda what the green blade means.",
-  "Collect the saber replica from the frame.",
-];
-
 const CAROUSEL_INTERVAL_MS = 5200;
 
 function randomVideoIndex(total: number) {
@@ -210,16 +204,6 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
             </div>
           </div>
 
-          <aside className="lnd-hero-meta" aria-label="Scene stats">
-            <div className="lnd-hero-stat">
-              <strong>{featuredVideo.agents.length}</strong>
-              <span>Active agents</span>
-            </div>
-            <div className="lnd-hero-stat">
-              <strong>∞</strong>
-              <span>Branch paths</span>
-            </div>
-          </aside>
         </section>
 
         <section className="lnd-section lnd-catalog" id="scene-catalog" aria-labelledby="catalog-title">
@@ -284,22 +268,6 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
           </div>
         </section>
 
-        <section className="lnd-section lnd-paths" aria-labelledby="paths-title">
-          <div className="lnd-section-header">
-            <h2 id="paths-title">Hot Branches</h2>
-            <button onClick={openFeaturedVideo}>More</button>
-          </div>
-
-          <div className="lnd-path-list">
-            {SCENE_PATHS.map((path, index) => (
-              <button className="lnd-path-item" key={path} onClick={openFeaturedVideo}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <strong>{path}</strong>
-                <em>{featuredVideo.agents[index] ?? "Director"}</em>
-              </button>
-            ))}
-          </div>
-        </section>
       </main>
     </div>
   );

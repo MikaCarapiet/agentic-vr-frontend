@@ -347,34 +347,6 @@
   border-color: rgba(226, 232, 240, 0.38);
 }
 
-.lnd-hero-meta {
-  position: absolute;
-  z-index: 3;
-  right: 60px;
-  bottom: 74px;
-  display: grid;
-  gap: 18px;
-  width: 144px;
-  text-align: right;
-}
-
-.lnd-hero-stat strong {
-  display: block;
-  color: #e2e8f0;
-  font-size: 2rem;
-  font-weight: 300;
-  line-height: 1.1;
-}
-
-.lnd-hero-stat span {
-  display: block;
-  color: #475569;
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
 .lnd-section {
   position: relative;
   z-index: 2;
@@ -420,8 +392,7 @@
 }
 
 .lnd-premiere-card,
-.lnd-universe-card,
-.lnd-path-item {
+.lnd-universe-card {
   border: 1px solid rgba(148, 163, 184, 0.12);
   border-radius: 10px;
   background: rgba(7, 16, 30, 0.55);
@@ -439,8 +410,7 @@
 }
 
 .lnd-premiere-card:hover,
-.lnd-premiere-card.active,
-.lnd-path-item:hover {
+.lnd-premiere-card.active {
   border-color: rgba(120, 216, 255, 0.32);
   background: rgba(7, 16, 30, 0.78);
 }
@@ -473,8 +443,7 @@
 }
 
 .lnd-premiere-copy,
-.lnd-universe-card,
-.lnd-path-item {
+.lnd-universe-card {
   display: grid;
 }
 
@@ -485,8 +454,6 @@
 
 .lnd-premiere-copy span,
 .lnd-universe-card span,
-.lnd-path-item span,
-.lnd-path-item em,
 .lnd-premiere-copy em {
   color: #64748b;
   font-size: 0.7rem;
@@ -494,8 +461,7 @@
 }
 
 .lnd-premiere-copy strong,
-.lnd-universe-card strong,
-.lnd-path-item strong {
+.lnd-universe-card strong {
   color: #e2e8f0;
   font-weight: 650;
 }
@@ -539,33 +505,6 @@ button.lnd-universe-card:hover {
   color: #78d8ff;
   font-size: 1.45rem;
   font-weight: 300;
-}
-
-.lnd-paths {
-  padding-bottom: 72px;
-}
-
-.lnd-path-list {
-  display: grid;
-  gap: 8px;
-}
-
-.lnd-path-item {
-  grid-template-columns: 44px minmax(0, 1fr) 84px;
-  align-items: center;
-  gap: 14px;
-  min-height: 54px;
-  padding: 0 16px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.lnd-path-item span {
-  color: #78d8ff;
-}
-
-.lnd-path-item em {
-  text-align: right;
 }
 
 @keyframes lndHeroImageIn {
@@ -614,11 +553,6 @@ button.lnd-universe-card:hover {
     margin-left: 28px;
   }
 
-  .lnd-hero-meta {
-    right: 28px;
-    bottom: 34px;
-  }
-
   .lnd-section {
     padding-inline: 28px;
   }
@@ -647,8 +581,7 @@ button.lnd-universe-card:hover {
       linear-gradient(180deg, rgba(4, 6, 15, 0.1) 0%, rgba(4, 6, 15, 0.32) 52%, #04060f 99%);
   }
 
-  .lnd-hero-script,
-  .lnd-hero-meta {
+  .lnd-hero-script {
     display: none;
   }
 
@@ -693,11 +626,4 @@ button.lnd-universe-card:hover {
     min-height: auto;
   }
 
-  .lnd-path-item {
-    grid-template-columns: 34px minmax(0, 1fr);
-  }
-
-  .lnd-path-item em {
-    display: none;
-  }
 }
