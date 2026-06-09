@@ -12,8 +12,15 @@ The frontend owns the viewer surface from the MVP architecture diagram:
 - agent trace display
 - fallback demo state while the AWS backend is still being built
 
-By default, the frontend calls `/backend`, and Vercel rewrites that path to the deployed AWS FastAPI backend. For local backend testing, override `VITE_SCENEVERSE_API_BASE_URL`.
-Local Vite dev also proxies `/backend` through `vite.config.ts`. It defaults to the deployed backend, but can be pointed at a local FastAPI process with `VITE_SCENEVERSE_BACKEND_PROXY_TARGET`.
+The frontend always calls `/backend` by default. The environment decides where `/backend` goes:
+
+| Environment | `/backend` target |
+| --- | --- |
+| Vercel production | cloud backend through `vercel.json` rewrite |
+| Local dev cloud mode | cloud backend through Vite proxy |
+| Local dev local mode | local backend through Vite proxy |
+
+This keeps deployed frontend users on the cloud backend while still letting local development switch between cloud and local backend debugging.
 
 ## Run locally
 
@@ -22,13 +29,25 @@ npm install
 npm run dev
 ```
 
-Restart `npm run dev` after changing `vite.config.ts`; Vite does not apply proxy config edits to an already-running dev server.
-
-To debug against a local backend:
+Default local dev uses the cloud backend:
 
 ```bash
-VITE_SCENEVERSE_BACKEND_PROXY_TARGET=http://localhost:8000 npm run dev
+npm run dev
 ```
+
+Explicit cloud backend mode:
+
+```bash
+npm run dev:cloud
+```
+
+Local backend debugging mode:
+
+```bash
+npm run dev:local
+```
+
+Restart the dev server when switching modes because Vite loads proxy config on startup.
 
 ## Backend contract
 
@@ -42,11 +61,13 @@ POST /api/chat
   -> intent, respondingAgent, response, updatedMemorySummary, agentTrace
 ```
 
-Set the backend URL in Vercel or local env:
+Frontend API base:
 
 ```bash
 VITE_SCENEVERSE_API_BASE_URL=/backend
 ```
+
+For Vercel production, leave this unset or set it to `/backend`. Do not set it to `localhost`.
 
 Current Vercel rewrite target:
 
