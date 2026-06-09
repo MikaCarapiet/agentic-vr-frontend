@@ -187,7 +187,23 @@ function mockChat(request: ChatRequest): ChatResponse {
     };
   }
 
-  if (/(collect|save|buy|replica|poster|item)/.test(text)) {
+  if (/(where can i buy|where can i purchase|where can i find|shop|buy that lightsaber|buy.*hilt|buy.*replica|buy.*blade)/.test(text)) {
+    return {
+      intent: "commerce_collect",
+      respondingAgent: "Director",
+      targetAgentId: "director",
+      response:
+        "The replica kit is available in the scene shop: a saber hilt, duel poster, and scene card are available after this moment ends.",
+      updatedMemorySummary: "Viewer asked where the lightsaber replica can be purchased.",
+      agentTrace: [
+        ...traceBase,
+        { agent: "Commerce Tool", step: "commerce catalog requested", status: "done" },
+        { agent: "Memory", step: "commerce intent stored", status: "done" },
+      ],
+    };
+  }
+
+  if (/(collect|save|replica|poster|item|scene card)/.test(text)) {
     return {
       intent: "commerce_collect",
       respondingAgent: "Director",
@@ -204,6 +220,22 @@ function mockChat(request: ChatRequest): ChatResponse {
         ...traceBase,
         { agent: "Commerce Tool", step: "save moment", status: "done" },
         { agent: "Memory", step: "collect intent stored", status: "done" },
+      ],
+    };
+  }
+
+  if (/(yoda.?s lightsaber|yoda.*lightsaber|why is.*lightsaber green|why.*green lightsaber)/.test(text)) {
+    return {
+      intent: "director_question",
+      respondingAgent: "Director",
+      targetAgentId: "director",
+      response:
+        "Yoda’s saber carries a green tone from his deep connection to equilibrium and defense; green in this language means control, balance, and restraint.",
+      updatedMemorySummary: "Director explained the meaning of Yoda’s green lightsaber.",
+      agentTrace: [
+        ...traceBase,
+        { agent: "Memory", step: "scene state loaded", status: "done" },
+        { agent: "Director Agent", step: "symbolism answer generated", status: "done" },
       ],
     };
   }
@@ -257,7 +289,8 @@ function mockChat(request: ChatRequest): ChatResponse {
   return {
     intent: "fallback_clarify",
     respondingAgent: "CineVerse",
-    response: "I can pause, rewind, fast forward, step into the scene, or collect this moment.",
+    response:
+      "I can pause, rewind, fast forward, step into the scene, explain why Yoda’s lightsaber is green, or tell you where to buy the replica.",
     updatedMemorySummary: "Viewer received available command options.",
     agentTrace: [...traceBase, { agent: "Fallbacks", step: "safe command guidance returned", status: "fallback" }],
   };

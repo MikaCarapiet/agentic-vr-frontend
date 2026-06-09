@@ -90,6 +90,9 @@ const promptSamples = [
   "ask Yoda why the blade matters",
   "director, what does this duel mean?",
   "collect this moment",
+  "ask Yoda why Yoda's lightsaber is green",
+  "where can I buy that lightsaber?",
+  "Exit the scene",
 ];
 
 const controlPrompts = [
@@ -97,7 +100,8 @@ const controlPrompts = [
   "rewind 10 seconds",
   "fast forward 20 seconds",
   "step into this scene",
-  "ask Yoda about the duel",
+  "ask Yoda why Yoda's lightsaber is green",
+  "where can I buy that lightsaber?",
   "collect this moment",
 ];
 
@@ -135,8 +139,15 @@ const inSceneNavigationPrompts: InSceneCommand[] = [
     detail: "Navigation: focus Vader",
   },
   {
-    label: "Return to cinematic controls",
-    aliases: ["return", "exit", "back to timeline", "leave scene", "cinematic controls"],
+    label: "Exit the scene",
+    aliases: [
+      "return to cinematic controls",
+      "return",
+      "exit the scene",
+      "exit",
+      "leave scene",
+      "cinematic controls",
+    ],
     exitMode: "watching",
     response: "Returning to cinematic controls.",
     detail: "Navigation: exited scene",
