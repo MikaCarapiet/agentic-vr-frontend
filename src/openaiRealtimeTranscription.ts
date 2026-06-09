@@ -77,11 +77,6 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
     this.latestDelta = "";
 
     try {
-      const token = await this.callbacks.getToken();
-      if (!token?.value) {
-        throw new Error("Realtime transcription token is unavailable.");
-      }
-
       const peerConnection = new RTCPeerConnection();
       const dataChannel = peerConnection.createDataChannel("oai-events");
       const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -91,6 +86,15 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
           autoGainControl: true,
         },
       });
+
+      this.peerConnection = peerConnection;
+      this.dataChannel = dataChannel;
+      this.mediaStream = mediaStream;
+
+      const token = await this.callbacks.getToken();
+      if (!token?.value) {
+        throw new Error("Realtime transcription token is unavailable.");
+      }
 
       mediaStream.getAudioTracks().forEach((track) => {
         peerConnection.addTrack(track, mediaStream);
@@ -108,10 +112,6 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
           this.callbacks.onError(`OpenAI realtime connection ${peerConnection.connectionState}.`);
         }
       });
-
-      this.peerConnection = peerConnection;
-      this.dataChannel = dataChannel;
-      this.mediaStream = mediaStream;
 
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);

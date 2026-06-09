@@ -5,7 +5,6 @@ import {
   createRealtimeTranscriptionToken,
   findCollectible,
   sendChat,
-  synthesizeSpeechAudio,
   type AgentTrace,
   type AppMode,
   type ChatResponse,
@@ -193,7 +192,6 @@ function App({ onExit }: AppProps) {
   const voiceRestartTimerRef = useRef<number | null>(null);
   const hudTimerRef = useRef<number | null>(null);
   const isScrubbingRef = useRef(false);
-  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [mode, setMode] = useState<AppMode>("watching");
   const [hudVisible, setHudVisible] = useState(true);
@@ -279,9 +277,6 @@ function App({ onExit }: AppProps) {
       if (hudTimerRef.current) window.clearTimeout(hudTimerRef.current);
       voiceInputRef.current?.abort?.();
       voiceInputRef.current?.stop();
-      const audioUrl = ttsAudioRef.current?.src;
-      ttsAudioRef.current?.pause();
-      if (audioUrl?.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
     };
   }, []);
 
@@ -534,57 +529,12 @@ function App({ onExit }: AppProps) {
     showTool({ label: "Vera listening", detail: "Say “Hey Vera” to activate" });
   }
 
-  async function speakWithTts(text: string, speaker: string) {
-    ttsAudioRef.current?.pause();
-    const previousObjectUrl = ttsAudioRef.current?.src;
-    if (previousObjectUrl?.startsWith("blob:")) {
-      URL.revokeObjectURL(previousObjectUrl);
-    }
-
-    const audioUrl = await synthesizeSpeechAudio(text, speaker);
-    if (!audioUrl) {
-      logAppEvent({
-        category: "voice",
-        label: "OpenAI TTS unavailable",
-        detail: speaker,
-        status: "fallback",
-      });
-      return;
-    }
-
-    const audio = new Audio(audioUrl);
-    ttsAudioRef.current = audio;
-    audio.addEventListener("ended", () => {
-      if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
-      if (ttsAudioRef.current === audio) ttsAudioRef.current = null;
-      setVoiceState(voiceSupported ? "listening" : "idle");
-    });
-    audio.addEventListener("error", () => {
-      if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
-      if (ttsAudioRef.current === audio) ttsAudioRef.current = null;
-      setVoiceState(voiceSupported ? "listening" : "idle");
-      logAppEvent({ category: "voice", label: "OpenAI TTS playback failed", detail: speaker, status: "error" });
-    });
-
-    try {
-      await audio.play();
-      logAppEvent({ category: "voice", label: "OpenAI TTS playback", detail: speaker, status: "active" });
-    } catch {
-      if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
-      if (ttsAudioRef.current === audio) ttsAudioRef.current = null;
-      logAppEvent({ category: "voice", label: "OpenAI TTS playback blocked", detail: speaker, status: "error" });
-    }
-  }
-
   function speakResponse(response: string, speaker: string) {
     const speakerAgentId = resolveAgentIdBySpeaker(speaker);
     if (speakerAgentId) setActiveAgentId(speakerAgentId);
     setVoiceState("speaking");
     setCaption(response);
     pushHistory({ speaker, text: response });
-    if (speaker !== "You" && speaker !== "CineVerse") {
-      void speakWithTts(response, speaker);
-    }
     window.setTimeout(() => {
       setVoiceState(voiceSupported ? "listening" : "idle");
       if (mode === "watching") setCaption("");
@@ -1377,6 +1327,8 @@ function App({ onExit }: AppProps) {
         title={
           !voiceEnabled
             ? "Vera is muted. Click to listen."
+            : voiceState === "error"
+              ? "OpenAI realtime voice failed. Click to retry."
             : veraSessionActive
               ? "Vera is active. Say stop listening to return to standby."
               : "Vera is in standby. Say Hey Vera to activate. Click to mute."
@@ -1384,6 +1336,8 @@ function App({ onExit }: AppProps) {
         aria-label={
           !voiceEnabled
             ? "Start Vera listening"
+            : voiceState === "error"
+              ? "Retry Vera listening"
             : veraSessionActive
               ? "Vera active"
               : "Mute Vera listening"
@@ -1393,10 +1347,10 @@ function App({ onExit }: AppProps) {
           event.stopPropagation();
           revealHud();
           selectLayer("vera-orb");
-          if (voiceEnabled) {
-            stopVeraListening();
-          } else {
+          if (!voiceEnabled || voiceState === "error" || !voiceInputRef.current) {
             startVeraListening();
+          } else {
+            stopVeraListening();
           }
         }}
         onFocus={() => {
