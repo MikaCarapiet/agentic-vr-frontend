@@ -229,12 +229,7 @@ function App() {
   const [heardText, setHeardText] = useState("");
   const [latestTool, setLatestTool] = useState<ToolEvent | null>(null);
   const [agents, setAgents] = useState<Agent[]>(defaultAgents);
-  const [history, setHistory] = useState<HistoryItem[]>([
-    { speaker: "You", text: "Vader, why are you here?" },
-    { speaker: "Vader", text: "The duel is not a question. It is a warning." },
-    { speaker: "You", text: "What do you want from Yoda?" },
-    { speaker: "Vader", text: "Surrender, or proof that his patience can break." },
-  ]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [activeAgentId, setActiveAgentId] = useState("shadow");
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -865,6 +860,7 @@ function App() {
   const latestSpeakerHistoryIndex = visibleHistory.reduce((latestIndex, item, index) => {
     return resolveAgentIdBySpeaker(item.speaker) ? index : latestIndex;
   }, -1);
+  const shouldShowResponseHistory = visibleHistory.length > 0 || Boolean(liveTranscript);
 
   return (
     <main
@@ -978,56 +974,58 @@ function App() {
         </ul>
       </aside>
 
-      <aside
-        className={layerClass("response-history", "response-history")}
-        aria-label="Latest response history"
-        data-layer-id="response-history"
-        data-layer-label="Latest response history"
-        title="Latest response history"
-        tabIndex={0}
-        onClick={() => selectLayer("response-history")}
-        onFocus={() => selectLayer("response-history")}
-      >
-        {visibleHistory.map((item, index) => {
-          const speakerAgentId = resolveAgentIdBySpeaker(item.speaker);
-          const isActiveSpeaker = Boolean(speakerAgentId && index === latestSpeakerHistoryIndex);
-          return (
-          <article
-            className={`${layerClass("history-item", `history-item-${index}`)} ${
-              isActiveSpeaker ? "speaker-highlight" : ""
-            }`}
-            data-layer-id={`history-item-${index}`}
-            data-layer-label={`History item ${index + 1}: ${item.speaker}`}
-            key={`${item.speaker}-${item.text}-${index}`}
-            tabIndex={0}
-            onClick={(event) => {
-              event.stopPropagation();
-              selectLayer(`history-item-${index}`);
-            }}
-            onFocus={() => selectLayer(`history-item-${index}`)}
-          >
-            <strong>{item.speaker}</strong>
-            <p>{item.text}</p>
-          </article>
-          );
-        })}
-        {liveTranscript ? (
-          <article
-            className={layerClass("history-item live-transcript", "live-transcript")}
-            data-layer-id="live-transcript"
-            data-layer-label="Live voice transcript"
-            tabIndex={0}
-            onClick={(event) => {
-              event.stopPropagation();
-              selectLayer("live-transcript");
-            }}
-            onFocus={() => selectLayer("live-transcript")}
-          >
-            <strong>You</strong>
-            <p>{liveTranscript}</p>
-          </article>
-        ) : null}
-      </aside>
+      {shouldShowResponseHistory ? (
+        <aside
+          className={layerClass("response-history", "response-history")}
+          aria-label="Latest response history"
+          data-layer-id="response-history"
+          data-layer-label="Latest response history"
+          title="Latest response history"
+          tabIndex={0}
+          onClick={() => selectLayer("response-history")}
+          onFocus={() => selectLayer("response-history")}
+        >
+          {visibleHistory.map((item, index) => {
+            const speakerAgentId = resolveAgentIdBySpeaker(item.speaker);
+            const isActiveSpeaker = Boolean(speakerAgentId && index === latestSpeakerHistoryIndex);
+            return (
+            <article
+              className={`${layerClass("history-item", `history-item-${index}`)} ${
+                isActiveSpeaker ? "speaker-highlight" : ""
+              }`}
+              data-layer-id={`history-item-${index}`}
+              data-layer-label={`History item ${index + 1}: ${item.speaker}`}
+              key={`${item.speaker}-${item.text}-${index}`}
+              tabIndex={0}
+              onClick={(event) => {
+                event.stopPropagation();
+                selectLayer(`history-item-${index}`);
+              }}
+              onFocus={() => selectLayer(`history-item-${index}`)}
+            >
+              <strong>{item.speaker}</strong>
+              <p>{item.text}</p>
+            </article>
+            );
+          })}
+          {liveTranscript ? (
+            <article
+              className={layerClass("history-item live-transcript", "live-transcript")}
+              data-layer-id="live-transcript"
+              data-layer-label="Live voice transcript"
+              tabIndex={0}
+              onClick={(event) => {
+                event.stopPropagation();
+                selectLayer("live-transcript");
+              }}
+              onFocus={() => selectLayer("live-transcript")}
+            >
+              <strong>You</strong>
+              <p>{liveTranscript}</p>
+            </article>
+          ) : null}
+        </aside>
+      ) : null}
 
       {latestTool ? (
         <div
