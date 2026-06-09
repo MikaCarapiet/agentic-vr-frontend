@@ -172,6 +172,25 @@ export type VideoListResponse = {
   rowCount: number;
 };
 
+export type CreateVideoLinkPayload = {
+  url: string;
+  title?: string;
+  sourceType: "youtube" | "external_url";
+};
+
+export type UpdateVideoPayload = {
+  title?: string | null;
+  sourceType?: VideoAsset["sourceType"];
+  originalUrl?: string | null;
+  playbackUrl?: string | null;
+  status?: string;
+};
+
+export type DeleteVideoResponse = {
+  deleted: boolean;
+  videoId: string;
+};
+
 const apiBaseUrl = (import.meta.env.VITE_SCENEVERSE_API_BASE_URL ?? "/backend").replace(/\/$/, "");
 const apiTimeoutMs = 2400;
 
@@ -297,6 +316,122 @@ async function postJson<TResponse>(
   }
 }
 
+async function patchJson<TResponse>(
+  path: string,
+  payload: unknown,
+  timeoutMs = apiTimeoutMs,
+): Promise<TResponse | null> {
+  if (!apiBaseUrl) return null;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  const url = `${apiBaseUrl}${path}`;
+
+  try {
+    logVeraDebug("api request", { path, url, timeoutMs });
+    logAppEvent({
+      category: "api",
+      label: `PATCH ${path}`,
+      detail: "request started",
+      status: "active",
+    });
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    logVeraDebug("api response", { path, status: response.status, ok: response.ok });
+
+    if (!response.ok) {
+      logAppEvent({
+        category: "api",
+        label: `PATCH ${path}`,
+        detail: `HTTP ${response.status}`,
+        status: "fallback",
+      });
+      return null;
+    }
+    logAppEvent({
+      category: "api",
+      label: `PATCH ${path}`,
+      detail: "response received",
+      status: "done",
+    });
+    return (await response.json()) as TResponse;
+  } catch (error) {
+    logVeraDebug("api error", {
+      path,
+      name: error instanceof Error ? error.name : "unknown",
+      message: error instanceof Error ? error.message : String(error),
+    });
+    logAppEvent({
+      category: "api",
+      label: `PATCH ${path}`,
+      detail: error instanceof DOMException && error.name === "AbortError" ? "request timed out" : "request failed",
+      status: "fallback",
+    });
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function deleteJson<TResponse>(path: string, timeoutMs = apiTimeoutMs): Promise<TResponse | null> {
+  if (!apiBaseUrl) return null;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  const url = `${apiBaseUrl}${path}`;
+
+  try {
+    logVeraDebug("api request", { path, url, timeoutMs });
+    logAppEvent({
+      category: "api",
+      label: `DELETE ${path}`,
+      detail: "request started",
+      status: "active",
+    });
+    const response = await fetch(url, {
+      method: "DELETE",
+      signal: controller.signal,
+    });
+    logVeraDebug("api response", { path, status: response.status, ok: response.ok });
+
+    if (!response.ok) {
+      logAppEvent({
+        category: "api",
+        label: `DELETE ${path}`,
+        detail: `HTTP ${response.status}`,
+        status: "fallback",
+      });
+      return null;
+    }
+    logAppEvent({
+      category: "api",
+      label: `DELETE ${path}`,
+      detail: "response received",
+      status: "done",
+    });
+    return (await response.json()) as TResponse;
+  } catch (error) {
+    logVeraDebug("api error", {
+      path,
+      name: error instanceof Error ? error.name : "unknown",
+      message: error instanceof Error ? error.message : String(error),
+    });
+    logAppEvent({
+      category: "api",
+      label: `DELETE ${path}`,
+      detail: error instanceof DOMException && error.name === "AbortError" ? "request timed out" : "request failed",
+      status: "fallback",
+    });
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export async function createRealtimeTranscriptionToken(): Promise<RealtimeTranscriptionToken | null> {
   return postJson<RealtimeTranscriptionToken>("/api/realtime/transcription-token", {}, 10000);
 }
@@ -311,6 +446,78 @@ export async function listVideos(limit = 24, offset = 0): Promise<VideoListRespo
 
 export async function getVideo(videoId: string): Promise<VideoAsset | null> {
   return getJson<VideoAsset>(`/api/videos/${encodeURIComponent(videoId)}`, 8000);
+}
+
+export async function createVideoLink(payload: CreateVideoLinkPayload): Promise<VideoAsset | null> {
+  return postJson<VideoAsset>("/api/videos/link", payload, 10000);
+}
+
+export async function updateVideo(videoId: string, payload: UpdateVideoPayload): Promise<VideoAsset | null> {
+  return patchJson<VideoAsset>(`/api/admin/videos/${encodeURIComponent(videoId)}`, payload, 10000);
+}
+
+export async function deleteVideo(videoId: string): Promise<DeleteVideoResponse | null> {
+  return deleteJson<DeleteVideoResponse>(`/api/admin/videos/${encodeURIComponent(videoId)}`, 10000);
+}
+
+export async function uploadVideo(file: File, title?: string): Promise<VideoAsset | null> {
+  if (!apiBaseUrl) return null;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 60000);
+  const formData = new FormData();
+  formData.append("file", file);
+  if (title?.trim()) formData.append("title", title.trim());
+  const path = "/api/videos/upload";
+  const url = `${apiBaseUrl}${path}`;
+
+  try {
+    logVeraDebug("api request", { path, url, timeoutMs: 60000 });
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: "upload started",
+      status: "active",
+    });
+    const response = await fetch(url, {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+    logVeraDebug("api response", { path, status: response.status, ok: response.ok });
+
+    if (!response.ok) {
+      logAppEvent({
+        category: "api",
+        label: `POST ${path}`,
+        detail: `HTTP ${response.status}`,
+        status: "fallback",
+      });
+      return null;
+    }
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: "upload complete",
+      status: "done",
+    });
+    return (await response.json()) as VideoAsset;
+  } catch (error) {
+    logVeraDebug("api error", {
+      path,
+      name: error instanceof Error ? error.name : "unknown",
+      message: error instanceof Error ? error.message : String(error),
+    });
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: error instanceof DOMException && error.name === "AbortError" ? "upload timed out" : "upload failed",
+      status: "fallback",
+    });
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 function normalizeTrace(trace: BackendAgentTrace[]): AgentTrace[] {
@@ -362,7 +569,7 @@ export async function analyzeScene(
     timestamp: request.timestamp,
     transcriptSegment: request.transcriptSegment,
     videoMetadata: {
-      videoId: "demo-duel",
+      videoId: request.videoMetadata.videoId,
       title: request.videoMetadata.title,
       source: request.videoMetadata.source,
     },

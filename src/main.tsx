@@ -22,6 +22,7 @@ import {
 import { routeUtterance } from "./sceneRouter";
 import { logVeraDebug } from "./veraDebug";
 import "./styles.css";
+import AdminVideosPage from "./AdminVideosPage";
 import Landing from "./Landing";
 import LogsPage from "./LogsPage";
 import {
@@ -1555,6 +1556,7 @@ function App({ video: sceneVideo, onExit }: AppProps) {
 }
 
 type AppRoute =
+  | { name: "adminVideos" }
   | { name: "logs" }
   | { name: "videos" }
   | { name: "video"; videoId: string };
@@ -1566,6 +1568,10 @@ function parseAppRoute(): AppRoute {
   }
 
   const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (pathname === "/admin/videos") {
+    return { name: "adminVideos" };
+  }
+
   const videoMatch = pathname.match(/^\/video\/([^/]+)$/);
   if (videoMatch?.[1]) {
     return { name: "video", videoId: decodeURIComponent(videoMatch[1]) };
@@ -1611,7 +1617,7 @@ function Root() {
   }, [route.name]);
 
   useEffect(() => {
-    if (route.name === "logs" || catalogLoadedRef.current) return;
+    if (route.name === "logs" || route.name === "adminVideos" || catalogLoadedRef.current) return;
 
     catalogLoadedRef.current = true;
     let cancelled = false;
@@ -1669,6 +1675,10 @@ function Root() {
 
   if (route.name === "logs") {
     return <LogsPage />;
+  }
+
+  if (route.name === "adminVideos") {
+    return <AdminVideosPage onOpenVideo={(videoId) => navigateTo(videoPath(videoId))} />;
   }
 
   if (route.name === "videos") {

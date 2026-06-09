@@ -12,6 +12,17 @@ The frontend owns the viewer surface from the MVP architecture diagram:
 - agent trace display
 - fallback demo state while the AWS backend is still being built
 
+## Routes
+
+```text
+/videos          public video catalogue
+/video/<id>      immersive voice/video player
+/admin/videos    MVP catalogue admin table
+/logs            local app event log
+```
+
+The admin page is intentionally separate from the public catalogue. It is not a security boundary yet; protect backend admin endpoints with real auth before production exposure.
+
 The frontend always calls `/backend` by default. The environment decides where `/backend` goes:
 
 | Environment | `/backend` target |
@@ -59,6 +70,15 @@ POST /api/scenes/analyze
 POST /api/chat
   sceneId, message, targetAgentId, playback
   -> intent, respondingAgent, response, updatedMemorySummary, agentTrace
+
+GET /api/videos
+  -> raw backend video records
+
+POST /api/videos/link
+POST /api/videos/upload
+PATCH /api/admin/videos/<id>
+DELETE /api/admin/videos/<id>
+  -> MVP catalogue admin operations
 ```
 
 Frontend API base:
