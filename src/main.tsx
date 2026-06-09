@@ -305,18 +305,30 @@ function App({ onExit }: AppProps) {
     }
   }
 
-  function startVoiceInput(controller = voiceInputRef.current) {
-    if (!controller || !voiceEnabledRef.current) return;
+  function formatVoiceStartError(error: unknown) {
+    if (!(error instanceof Error)) return "OpenAI realtime voice could not start.";
+
+    if (error.name === "NotFoundError" || /device not found|requested device not found/i.test(error.message)) {
+      return "No microphone found. Check Chrome and macOS microphone input settings.";
+    }
+
+    if (error.name === "NotAllowedError" || /permission/i.test(error.message)) {
+      return "Microphone permission is blocked. Allow microphone access in Chrome.";
+    }
+
+    return "OpenAI realtime voice could not start.";
+  }
+
+  async function startVoiceInput(controller = voiceInputRef.current) {
+    if (!controller || !voiceEnabledRef.current) return false;
 
     try {
-      const result = controller.start();
-      if (result instanceof Promise) {
-        void result.catch(() => {
-          setVoiceState(voiceEnabledRef.current ? "error" : "idle");
-        });
-      }
-    } catch {
+      await controller.start();
+      return true;
+    } catch (error) {
       setVoiceState(voiceEnabledRef.current ? "error" : "idle");
+      setCaption(formatVoiceStartError(error));
+      return false;
     }
   }
 
@@ -375,6 +387,7 @@ function App({ onExit }: AppProps) {
             status: "error",
           });
           setVoiceState(voiceEnabledRef.current ? "error" : "idle");
+          setCaption(message);
         },
       });
 
@@ -383,13 +396,14 @@ function App({ onExit }: AppProps) {
         if (voiceEnabledRef.current) await realtimeInput.start();
       } catch (error) {
         if (cancelled) return;
+        const detail = formatVoiceStartError(error);
         setVoiceSupported(true);
         setVoiceState("error");
-        setCaption("OpenAI realtime voice could not start.");
+        setCaption(detail);
         logAppEvent({
           category: "voice",
           label: "OpenAI Realtime STT unavailable",
-          detail: error instanceof Error ? error.message : "OpenAI Realtime setup failed",
+          detail,
           status: "error",
         });
       }
@@ -524,9 +538,15 @@ function App({ onExit }: AppProps) {
     setVeraSessionActive(false);
     setVoiceState("listening");
     setCaption("Say “Hey Vera” to activate.");
-    startVoiceInput();
-    logAppEvent({ category: "voice", label: "Vera listening", detail: "standby wake phrase mode", status: "active" });
-    showTool({ label: "Vera listening", detail: "Say “Hey Vera” to activate" });
+    void startVoiceInput().then((started) => {
+      if (!started) {
+        showTool({ label: "Vera unavailable", detail: "Check microphone input" });
+        return;
+      }
+
+      logAppEvent({ category: "voice", label: "Vera listening", detail: "standby wake phrase mode", status: "active" });
+      showTool({ label: "Vera listening", detail: "Say “Hey Vera” to activate" });
+    });
   }
 
   function speakResponse(response: string, speaker: string) {

@@ -37,6 +37,20 @@ export function isOpenAIRealtimeTranscriptionSupported() {
   );
 }
 
+function describeRealtimeError(error: unknown) {
+  if (!(error instanceof Error)) return "OpenAI realtime setup failed.";
+
+  if (error.name === "NotFoundError" || /device not found|requested device not found/i.test(error.message)) {
+    return "No microphone input device was found. Check Chrome and macOS microphone input settings.";
+  }
+
+  if (error.name === "NotAllowedError" || /permission/i.test(error.message)) {
+    return "Microphone permission was blocked. Allow microphone access in Chrome.";
+  }
+
+  return error.message;
+}
+
 function waitForIceGatheringComplete(peerConnection: RTCPeerConnection) {
   if (peerConnection.iceGatheringState === "complete") return Promise.resolve();
 
@@ -141,7 +155,7 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
       });
     } catch (error) {
       this.close();
-      this.callbacks.onError(error instanceof Error ? error.message : "OpenAI realtime setup failed.");
+      this.callbacks.onError(describeRealtimeError(error));
       throw error;
     }
   }
