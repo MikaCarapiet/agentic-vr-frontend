@@ -95,21 +95,6 @@ const generationSteps: ToolEvent[] = [
   { label: "Memory initialized", detail: "scene state ready" },
 ];
 
-const promptSamples = [
-  "Hey Vera, step into this scene",
-  "Hey Vera, pause the video",
-  "step into this scene",
-  "pause",
-  "rewind 10 seconds",
-  "fast forward 20 seconds",
-  "ask Yoda why the blade matters",
-  "director, what does this duel mean?",
-  "collect this moment",
-  "ask Yoda why Yoda's lightsaber is green",
-  "where can I buy that lightsaber?",
-  "Exit the scene",
-];
-
 const controlPrompts = [
   "play the video",
   "pause the video",
@@ -224,8 +209,10 @@ function App() {
   const generationTimerRef = useRef<number | null>(null);
   const responseTimerRef = useRef<number | null>(null);
   const voiceRestartTimerRef = useRef<number | null>(null);
+  const hudTimerRef = useRef<number | null>(null);
 
   const [mode, setMode] = useState<AppMode>("watching");
+  const [hudVisible, setHudVisible] = useState(true);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [caption, setCaption] = useState("Say “step into this scene”");
   const [heardText, setHeardText] = useState("");
@@ -241,7 +228,6 @@ function App() {
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [veraSessionActive, setVeraSessionActive] = useState(false);
-  const [manualText, setManualText] = useState("");
   const [lastIntent, setLastIntent] = useState<Intent | "none">("none");
   const [selectedLayer, setSelectedLayer] = useState("scene-video");
   const [commerceCollectible, setCommerceCollectible] = useState<CommerceCollectible | null>(null);
@@ -308,9 +294,23 @@ function App() {
       if (generationTimerRef.current) window.clearInterval(generationTimerRef.current);
       if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
       if (voiceRestartTimerRef.current) window.clearTimeout(voiceRestartTimerRef.current);
+      if (hudTimerRef.current) window.clearTimeout(hudTimerRef.current);
       recognitionRef.current?.abort?.();
       recognitionRef.current?.stop();
     };
+  }, []);
+
+  function revealHud(duration = 7600) {
+    setHudVisible(true);
+    if (hudTimerRef.current) window.clearTimeout(hudTimerRef.current);
+    hudTimerRef.current = window.setTimeout(() => {
+      setHudVisible(false);
+      hudTimerRef.current = null;
+    }, duration);
+  }
+
+  useEffect(() => {
+    revealHud();
   }, []);
 
   useEffect(() => {
@@ -318,7 +318,7 @@ function App() {
     if (!Recognition) {
       setVoiceSupported(false);
       setVoiceState("idle");
-      setCaption("Voice prototype unavailable. Use demo text.");
+      setCaption("Voice prototype unavailable. Use the guide prompts.");
       return;
     }
 
@@ -387,6 +387,7 @@ function App() {
 
   function showTool(event: ToolEvent, clearAfter = 2400) {
     setLatestTool(event);
+    revealHud(Math.max(6200, clearAfter + 1500));
     logAppEvent({
       category: "system",
       label: event.label,
@@ -410,6 +411,7 @@ function App() {
   }
 
   function activateVeraSession() {
+    revealHud();
     if (voiceRestartTimerRef.current) {
       window.clearTimeout(voiceRestartTimerRef.current);
       voiceRestartTimerRef.current = null;
@@ -451,6 +453,7 @@ function App() {
   }
 
   function deactivateVeraSession() {
+    revealHud();
     veraSessionActiveRef.current = false;
     setVeraSessionActive(false);
     setVoiceState(voiceSupported && voiceEnabledRef.current ? "listening" : "idle");
@@ -461,6 +464,7 @@ function App() {
   }
 
   function stopVeraListening() {
+    revealHud();
     voiceEnabledRef.current = false;
     veraSessionActiveRef.current = false;
     if (voiceRestartTimerRef.current) {
@@ -478,8 +482,9 @@ function App() {
   }
 
   function startVeraListening() {
+    revealHud();
     if (!voiceSupported) {
-      showTool({ label: "Voice unavailable", detail: "Use demo text input" });
+      showTool({ label: "Voice unavailable", detail: "Use the guide prompts" });
       return;
     }
 
@@ -875,6 +880,7 @@ function App() {
 
   function handleUtterance(utterance: string) {
     if (!utterance.trim()) return;
+    revealHud();
     const parsed = parseWakeCommand(utterance);
     setHeardText(utterance);
     pushHistory({ speaker: "You", text: utterance });
@@ -900,21 +906,8 @@ function App() {
     handleUtterancePayload(utterance);
   }
 
-  function handleManualSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = manualText.trim();
-    if (!text) return;
-    setManualText("");
-    handleUtterance(text);
-  }
-
   function handleGuideClick(prompt: string) {
-    const matched = matchInSceneNavigationCommand(prompt);
-    if (mode === "in-scene" && matched) {
-      void handleUtterance(`Hey Vera, ${prompt}`);
-      return;
-    }
-    setManualText(`Hey Vera, ${prompt}`);
+    void handleUtterance(`Hey Vera, ${prompt}`);
   }
 
   function handleVoiceFinal(utterance: string) {
@@ -951,10 +944,12 @@ function App() {
 
   return (
     <main
-      className={`experience mode-${mode}`}
+      className={`experience mode-${mode} ${hudVisible ? "hud-visible" : "hud-idle"}`}
       data-layer-id="app-root"
       data-layer-label="App root"
+      onPointerMove={() => revealHud()}
       onPointerDownCapture={(event) => {
+        revealHud();
         const target = event.target as HTMLElement | null;
         const layer = target?.closest<HTMLElement>("[data-layer-id]");
         if (layer?.dataset.layerId) {
@@ -1248,80 +1243,48 @@ function App() {
             </span>
           </>
         )}
-        <button
-          className={`${layerClass("vera-orb", "vera-orb")} ${
-            !voiceEnabled ? "muted" : veraSessionActive ? "session-active" : voiceState
-          }`}
-          data-layer-id="vera-orb"
-          data-layer-label="Vera wake word"
-          title={
-            !voiceEnabled
-              ? "Vera is muted. Click to listen."
-              : veraSessionActive
-                ? "Vera is active. Say stop listening to return to standby."
-                : "Vera is in standby. Say Hey Vera to activate. Click to mute."
-          }
-          aria-label={
-            !voiceEnabled
-              ? "Start Vera listening"
-              : veraSessionActive
-                ? "Vera active"
-                : "Mute Vera listening"
-          }
-          aria-pressed={voiceEnabled}
-          onClick={(event) => {
-            event.stopPropagation();
-            selectLayer("vera-orb");
-            if (voiceEnabled) {
-              stopVeraListening();
-            } else {
-              startVeraListening();
-            }
-          }}
-          onFocus={() => selectLayer("vera-orb")}
-        >
-          <span />
-          <span />
-          <span />
-        </button>
-        <form
-          className={layerClass("demo-input", "demo-input")}
-          data-layer-id="demo-input"
-          data-layer-label="Demo text input group"
-          onSubmit={handleManualSubmit}
-          onClick={(event) => {
-            event.stopPropagation();
-            selectLayer("demo-input");
-          }}
-        >
-          <input
-            className={layerClass("", "demo-text-input")}
-            data-layer-id="demo-text-input"
-            data-layer-label="Demo text input"
-            aria-label="Demo voice text"
-            list="prompt-samples"
-            placeholder={voiceSupported ? "Demo override..." : "Say anything..."}
-            value={manualText}
-            onChange={(event) => setManualText(event.target.value)}
-            onFocus={() => selectLayer("demo-text-input")}
-          />
-          <datalist id="prompt-samples">
-            {promptSamples.map((sample) => (
-              <option key={sample} value={sample} />
-            ))}
-          </datalist>
-          <button
-            className={layerClass("", "send-button")}
-            data-layer-id="send-button"
-            data-layer-label="Send button"
-            type="submit"
-            onClick={() => selectLayer("send-button")}
-            onFocus={() => selectLayer("send-button")}
-          >
-            Send
-          </button>
-        </form>
       </footer>
+
+      <button
+        className={`${layerClass("vera-dock vera-orb", "vera-orb")} ${
+          !voiceEnabled ? "muted" : veraSessionActive ? "session-active" : voiceState
+        }`}
+        data-layer-id="vera-orb"
+        data-layer-label="Vera wake word"
+        title={
+          !voiceEnabled
+            ? "Vera is muted. Click to listen."
+            : veraSessionActive
+              ? "Vera is active. Say stop listening to return to standby."
+              : "Vera is in standby. Say Hey Vera to activate. Click to mute."
+        }
+        aria-label={
+          !voiceEnabled
+            ? "Start Vera listening"
+            : veraSessionActive
+              ? "Vera active"
+              : "Mute Vera listening"
+        }
+        aria-pressed={voiceEnabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          revealHud();
+          selectLayer("vera-orb");
+          if (voiceEnabled) {
+            stopVeraListening();
+          } else {
+            startVeraListening();
+          }
+        }}
+        onFocus={() => {
+          revealHud();
+          selectLayer("vera-orb");
+        }}
+      >
+        <span />
+        <span />
+        <span />
+      </button>
 
       {debugOpen ? (
         <section

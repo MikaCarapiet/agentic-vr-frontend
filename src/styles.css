@@ -57,6 +57,47 @@ button {
   background: #050507;
 }
 
+.control-guide,
+.response-history,
+.tool-card,
+.generation-panel,
+.commerce-card,
+.bottom-bar {
+  transition:
+    opacity 680ms ease,
+    transform 680ms ease,
+    filter 680ms ease;
+}
+
+.hud-idle .control-guide,
+.hud-idle .response-history,
+.hud-idle .tool-card,
+.hud-idle .generation-panel,
+.hud-idle .commerce-card,
+.hud-idle .bottom-bar {
+  opacity: 0;
+  pointer-events: none;
+  filter: blur(1px);
+}
+
+.hud-idle .control-guide,
+.hud-idle .commerce-card {
+  transform: translateY(8px);
+}
+
+.hud-idle .response-history,
+.hud-idle .tool-card {
+  transform: translateY(-6px);
+}
+
+.hud-idle .generation-panel {
+  transform: translateX(-50%) translateY(-8px);
+}
+
+.hud-idle .bottom-bar {
+  transform: translateY(18px);
+}
+
 .scene-video {
   position: absolute;
   inset: 0;
@@ -240,15 +281,15 @@ button {
 
 .bottom-bar {
   bottom: 0;
-  grid-template-columns: auto auto minmax(160px, 1fr) auto auto minmax(220px, 0.35fr);
+  grid-template-columns: auto auto minmax(160px, 1fr) auto;
   gap: 12px;
   min-height: 54px;
   border-top: 1px solid var(--line);
-  padding: 9px 22px;
+  padding: 9px 82px 9px 22px;
 }
 
 .bottom-bar.in-scene {
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr;
 }
 
 .bottom-bar.in-scene .play-button,
@@ -335,8 +376,7 @@ button {
 }
 
 .ghost-button,
-.play-button,
-.demo-input button {
+.play-button {
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--text);
@@ -555,6 +595,34 @@ button {
     transform 180ms ease,
     box-shadow 180ms ease,
     background 180ms ease;
+}
+
+.vera-dock {
+  position: absolute;
+  right: 24px;
+  bottom: 16px;
+  z-index: 8;
+  width: 40px;
+  box-shadow:
+    0 0 0 1px rgba(127, 198, 255, 0.1),
+    0 0 24px rgba(127, 198, 255, 0.28);
+  transition:
+    opacity 680ms ease,
+    transform 220ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease;
+}
+
+.hud-idle .vera-dock {
+  opacity: 0.58;
+  box-shadow:
+    0 0 0 1px rgba(127, 198, 255, 0.08),
+    0 0 16px rgba(127, 198, 255, 0.14);
+}
+
+.hud-visible .vera-dock {
+  opacity: 1;
 }
 
 .vera-orb::after {
@@ -859,36 +927,6 @@ button {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--red), var(--gold));
-}
-
-.demo-input {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
-  min-width: 0;
-}
-
-.demo-input input {
-  width: 100%;
-  min-height: 34px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 0 10px;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.055);
-  outline: none;
-  font-size: 0.76rem;
-}
-
-.demo-input input::placeholder {
-  color: var(--dim);
-}
-
-.demo-input button {
-  min-height: 34px;
-  padding: 0 10px;
-  color: var(--muted);
-  font-size: 0.72rem;
 }
 
 .debug-drawer {
@@ -1196,16 +1234,12 @@ button {
   }
 
   .bottom-bar {
-    grid-template-columns: auto auto minmax(90px, 1fr) auto auto;
-    padding-inline: 14px;
+    grid-template-columns: auto auto minmax(90px, 1fr) auto;
+    padding-inline: 14px 68px;
   }
 
   .bottom-bar.in-scene {
-    grid-template-columns: 1fr auto;
-  }
-
-  .demo-input {
-    display: none;
+    grid-template-columns: 1fr;
   }
 
   .agent-stack {
@@ -1242,10 +1276,6 @@ button {
   .bottom-bar {
     min-height: 44px;
     padding-block: 6px;
-  }
-
-  .bottom-bar .vera-orb {
-    width: 30px;
   }
 
   .brand-lockup span {
@@ -1322,6 +1352,12 @@ button {
 
   .vera-orb {
     width: 36px;
+  }
+
+  .vera-dock {
+    right: 16px;
+    bottom: 12px;
+    width: 34px;
   }
 }
 
@@ -1449,18 +1485,14 @@ button {
   }
 
   .bottom-bar {
-    grid-template-columns: auto auto minmax(96px, 1fr) auto auto;
+    grid-template-columns: auto auto minmax(96px, 1fr) auto;
     min-height: 42px;
     gap: 8px;
-    padding: 6px 10px;
+    padding: 6px 56px 6px 10px;
   }
 
   .bottom-bar.in-scene {
-    grid-template-columns: 1fr auto;
-  }
-
-  .demo-input {
-    display: none;
+    grid-template-columns: 1fr;
   }
 
   .play-button {
@@ -1477,9 +1509,14 @@ button {
     height: 4px;
   }
 
-  .bottom-bar .vera-orb,
   .vera-orb {
     width: 28px;
+  }
+
+  .vera-dock {
+    right: 10px;
+    bottom: 9px;
+    width: 30px;
   }
 
   .vera-orb span:nth-child(1) {
