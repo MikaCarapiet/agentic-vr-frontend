@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import {
   analyzeScene,
   sendChat,
@@ -1267,6 +1267,7 @@ function App() {
         <div className="orientation-lock-card">
           <div className="phone-rotate-mark" aria-hidden="true">
             <span />
+            <span />
           </div>
           <span>Landscape required</span>
           <strong>Rotate your phone</strong>
@@ -1278,4 +1279,9 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+const rootElement = document.getElementById("root") as HTMLElement & {
+  sceneVerseRoot?: Root;
+};
+
+rootElement.sceneVerseRoot ??= createRoot(rootElement);
+rootElement.sceneVerseRoot.render(<App />);
