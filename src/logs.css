@@ -1,0 +1,249 @@
+.logs-page {
+  height: 100vh;
+  min-height: 100vh;
+  padding: 28px clamp(18px, 4vw, 56px) 48px;
+  overflow-y: auto;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 12% 6%, rgba(127, 198, 255, 0.11), transparent 34%),
+    radial-gradient(circle at 92% 12%, rgba(245, 197, 110, 0.11), transparent 30%),
+    #050507;
+}
+
+.logs-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 auto 22px;
+  max-width: 1180px;
+}
+
+.logs-back {
+  display: inline-flex;
+  margin-bottom: 12px;
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.logs-header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 4.2rem);
+  line-height: 0.96;
+}
+
+.logs-header p {
+  max-width: 660px;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.logs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.logs-button,
+.logs-actions button,
+.logs-filters button {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.055);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.logs-button,
+.logs-actions button {
+  padding: 10px 13px;
+}
+
+.logs-button.danger {
+  color: rgba(255, 126, 146, 0.9);
+}
+
+.logs-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 1180px;
+  margin: 0 auto 16px;
+}
+
+.logs-stats article {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(8, 9, 12, 0.58);
+  backdrop-filter: blur(16px);
+}
+
+.logs-stats span,
+.log-title span,
+.logs-meta dt {
+  color: var(--dim);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.logs-stats strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 1.35rem;
+}
+
+.logs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 1180px;
+  margin: 0 auto 16px;
+}
+
+.logs-filters button {
+  padding: 7px 10px;
+  color: var(--muted);
+}
+
+.logs-filters button.active {
+  border-color: rgba(127, 198, 255, 0.44);
+  color: var(--blue);
+  background: rgba(127, 198, 255, 0.09);
+}
+
+.logs-timeline {
+  display: grid;
+  gap: 8px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.log-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 14px;
+  border-left: 2px solid rgba(255, 255, 255, 0.14);
+  padding: 12px 14px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
+    rgba(8, 9, 12, 0.58);
+}
+
+.log-row.status-active {
+  border-left-color: var(--blue);
+}
+
+.log-row.status-fallback {
+  border-left-color: var(--gold);
+}
+
+.log-row.status-error {
+  border-left-color: var(--red);
+}
+
+.log-row time {
+  color: var(--dim);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.log-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.log-title strong {
+  font-size: 0.95rem;
+}
+
+.log-title em {
+  color: var(--gold);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.log-body p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.logs-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 10px 0 0;
+}
+
+.logs-meta div {
+  min-width: 0;
+}
+
+.logs-meta dt,
+.logs-meta dd {
+  margin: 0;
+}
+
+.logs-meta dd {
+  overflow: hidden;
+  color: rgba(246, 242, 233, 0.72);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logs-empty {
+  display: grid;
+  gap: 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 28px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.logs-empty strong {
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  .logs-header {
+    display: grid;
+  }
+
+  .logs-actions {
+    justify-content: flex-start;
+  }
+
+  .logs-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .log-row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .logs-meta {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,3 +1,5 @@
+import { logAppEvent } from "./appLogger";
+
 export type AppMode = "watching" | "generating" | "in-scene";
 
 export type Intent =
@@ -142,6 +144,12 @@ async function postJson<TResponse>(path: string, payload: unknown): Promise<TRes
   const timeoutId = window.setTimeout(() => controller.abort(), apiTimeoutMs);
 
   try {
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: "request started",
+      status: "active",
+    });
     const response = await fetch(`${apiBaseUrl}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -149,9 +157,29 @@ async function postJson<TResponse>(path: string, payload: unknown): Promise<TRes
       signal: controller.signal,
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      logAppEvent({
+        category: "api",
+        label: `POST ${path}`,
+        detail: `HTTP ${response.status}`,
+        status: "fallback",
+      });
+      return null;
+    }
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: "response received",
+      status: "done",
+    });
     return (await response.json()) as TResponse;
-  } catch {
+  } catch (error) {
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: error instanceof DOMException && error.name === "AbortError" ? "request timed out" : "request failed",
+      status: "fallback",
+    });
     return null;
   } finally {
     window.clearTimeout(timeoutId);

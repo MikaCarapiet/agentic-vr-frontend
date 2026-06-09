@@ -6,6 +6,10 @@
     {
       "source": "/backend/:path*",
       "destination": "http://32.197.15.186/:path*"
+    },
+    {
+      "source": "/logs",
+      "destination": "/"
     }
   ]
 }

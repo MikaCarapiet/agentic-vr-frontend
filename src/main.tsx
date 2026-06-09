@@ -10,9 +10,11 @@ import {
   type CommerceCollectible,
   type Intent,
 } from "./sceneverseApi";
+import { logAppEvent } from "./appLogger";
 import { routeUtterance } from "./sceneRouter";
 import "./styles.css";
 import Landing from "./Landing";
+import LogsPage from "./LogsPage";
 
 const videoSrc = "/demo-duel.mp4";
 
@@ -375,12 +377,36 @@ function App() {
 
   function pushHistory(item: HistoryItem) {
     setHistory((items) => [...items.slice(-7), item]);
+    logAppEvent({
+      category: item.speaker === "You" ? "voice" : "agent",
+      label: item.speaker,
+      detail: item.text,
+      status: "done",
+    });
   }
 
   function showTool(event: ToolEvent, clearAfter = 2400) {
     setLatestTool(event);
+    logAppEvent({
+      category: "system",
+      label: event.label,
+      detail: event.detail,
+      status: "active",
+    });
     if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
     responseTimerRef.current = window.setTimeout(() => setLatestTool(null), clearAfter);
+  }
+
+  function logTrace(source: string, trace: AgentTrace[]) {
+    trace.forEach((step) => {
+      logAppEvent({
+        category: "agent",
+        label: step.agent,
+        detail: step.step,
+        status: step.status,
+        metadata: { source },
+      });
+    });
   }
 
   function activateVeraSession() {
@@ -392,6 +418,7 @@ function App() {
     setVeraSessionActive(true);
     setVoiceState(voiceSupported ? "listening" : "idle");
     setCaption("I'm listening.");
+    logAppEvent({ category: "voice", label: "Vera active", detail: "wake phrase accepted", status: "active" });
     showTool({ label: "Vera active", detail: "Say “stop listening” to end" });
   }
 
@@ -428,6 +455,7 @@ function App() {
     setVeraSessionActive(false);
     setVoiceState(voiceSupported && voiceEnabledRef.current ? "listening" : "idle");
     setCaption("");
+    logAppEvent({ category: "voice", label: "Vera standby", detail: "stop listening command", status: "done" });
     showTool({ label: "Vera standby", detail: "Say “Hey Vera” to activate" });
     restartStandbyRecognition();
   }
@@ -445,6 +473,7 @@ function App() {
     setCaption("");
     recognitionRef.current?.abort?.();
     recognitionRef.current?.stop();
+    logAppEvent({ category: "voice", label: "Vera muted", detail: "manual mute", status: "done" });
     showTool({ label: "Vera muted", detail: "Click Vera to listen again" });
   }
 
@@ -469,6 +498,7 @@ function App() {
     } catch {
       setVoiceState("listening");
     }
+    logAppEvent({ category: "voice", label: "Vera listening", detail: "standby wake phrase mode", status: "active" });
     showTool({ label: "Vera listening", detail: "Say “Hey Vera” to activate" });
   }
 
@@ -536,6 +566,13 @@ function App() {
       { agent: "Vercel Frontend", step: "paused frame + timestamp captured", status: "active" },
       { agent: "AWS FastAPI Backend", step: "scene analysis request pending", status: "queued" },
     ]);
+    logAppEvent({
+      category: "scene",
+      label: "Scene generation started",
+      detail: "frame capture + analyze request queued",
+      status: "active",
+      metadata: { timestamp: video?.currentTime ?? currentTime },
+    });
     showTool(generationSteps[0], 5200);
 
     let step = 0;
@@ -571,6 +608,19 @@ function App() {
     setAgents(withDirectorAgent(analysis.characters));
     setMemorySummary(analysis.memorySummary);
     setAgentTrace(analysis.agentTrace);
+    logTrace("scene-analysis", analysis.agentTrace);
+    logAppEvent({
+      category: "scene",
+      label: "Scene parsed",
+      detail: analysis.sceneSummary,
+      status: analysis.agentTrace.some((step) => step.status === "fallback") ? "fallback" : "done",
+      metadata: {
+        sceneId: analysis.sceneId,
+        objects: analysis.objects,
+        characters: analysis.characters.map((agent) => agent.name),
+        emotionalTone: analysis.emotionalTone,
+      },
+    });
     setMode("in-scene");
     setGenerationStep(-1);
     setActiveAgentId(analysis.characters[0]?.id ?? "director");
@@ -621,12 +671,14 @@ function App() {
 
     if (action === "pause") {
       const paused = pauseVideo();
+      logAppEvent({ category: "playback", label: "Pause", detail: paused ? "video paused" : "pause unavailable", status: paused ? "done" : "error" });
       showTool({ label: paused ? "Tool: pause video" : "Pause unavailable" });
       return paused;
     }
 
     if (action === "play") {
       const played = await playVideo();
+      logAppEvent({ category: "playback", label: "Play", detail: played ? "video playing" : "playback blocked", status: played ? "done" : "error" });
       if (played) showTool({ label: "Tool: play video" });
       return played;
     }
@@ -634,6 +686,7 @@ function App() {
     if (action === "rewind") {
       video.currentTime = Math.max(0, video.currentTime - 10);
       setCurrentTime(video.currentTime);
+      logAppEvent({ category: "playback", label: "Rewind", detail: "-10 seconds", status: "done", metadata: { currentTime: video.currentTime } });
       showTool({ label: "Tool: rewind", detail: "-10 seconds" });
       return true;
     }
@@ -644,6 +697,7 @@ function App() {
         video.currentTime + 20,
       );
       setCurrentTime(video.currentTime);
+      logAppEvent({ category: "playback", label: "Fast forward", detail: "+20 seconds", status: "done", metadata: { currentTime: video.currentTime } });
       showTool({ label: "Tool: fast forward", detail: "+20 seconds" });
       return true;
     }
@@ -672,6 +726,20 @@ function App() {
     });
     setLastIntent(route.intent);
     setAgentTrace(route.agentTrace);
+    logTrace("frontend-router", route.agentTrace);
+    logAppEvent({
+      category: "router",
+      label: route.kind,
+      detail: route.tool.detail ?? route.tool.label,
+      status: route.kind === "fallback_clarify" ? "fallback" : "done",
+      metadata: {
+        utterance,
+        intent: route.intent,
+        targetAgentId: route.targetAgentId,
+        action: route.action,
+        objectLabel: route.objectLabel,
+      },
+    });
     showTool(route.tool);
 
     if (route.kind === "video_control") {
@@ -739,6 +807,14 @@ function App() {
     setLastIntent(finalIntent);
     setMemorySummary(routed.updatedMemorySummary);
     setAgentTrace([...route.agentTrace, ...routed.agentTrace]);
+    logTrace("chat-response", routed.agentTrace);
+    logAppEvent({
+      category: "memory",
+      label: "Memory updated",
+      detail: routed.updatedMemorySummary,
+      status: routed.agentTrace.some((step) => step.status === "fallback") ? "fallback" : "done",
+      metadata: { intent: finalIntent, respondingAgent: routed.respondingAgent },
+    });
     showTool({
       label:
         finalIntent === "video_control"
@@ -777,6 +853,17 @@ function App() {
           `${utterance} collectible replica ${route.objectLabel ?? sceneObjects.join(" ")} scene item`,
         ));
       setCommerceCollectible(collectible);
+      logAppEvent({
+        category: "commerce",
+        label: collectible.title,
+        detail: collectible.summary,
+        status: collectible.sourceUrl === "#" ? "fallback" : "done",
+        metadata: {
+          sourceTitle: collectible.sourceTitle,
+          sourceUrl: collectible.sourceUrl,
+          objectLabel: route.objectLabel,
+        },
+      });
     }
 
     window.setTimeout(() => {
@@ -1297,12 +1384,18 @@ function App() {
 }
 
 function Root() {
+  const isLogsPage =
+    window.location.pathname === "/logs" || new URLSearchParams(window.location.search).has("logs");
   const [inExperience, setInExperience] = useState(false);
 
   useEffect(() => {
-    document.body.style.overflow = inExperience ? "hidden" : "auto";
+    document.body.style.overflow = inExperience || isLogsPage ? "hidden" : "auto";
     return () => { document.body.style.overflow = ""; };
-  }, [inExperience]);
+  }, [inExperience, isLogsPage]);
+
+  if (isLogsPage) {
+    return <LogsPage />;
+  }
 
   if (!inExperience) {
     return <Landing onEnter={() => setInExperience(true)} />;
