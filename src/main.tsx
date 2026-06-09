@@ -177,7 +177,7 @@ type WakeCommandParse = {
 function parseWakeCommand(text: string): WakeCommandParse {
   const trimmed = text.trim();
   const match = trimmed.match(
-    /^\s*hey\s+vera\b[\s,:;!\-?.]*\s*(.*)$/i,
+    /\bhey\s+vera\b[\s,:;!\-?.]*\s*(.*)$/i,
   );
 
   if (!match) {
@@ -193,6 +193,27 @@ function parseWakeCommand(text: string): WakeCommandParse {
 
 function isStopListeningCommand(text: string) {
   return /\b(stop listening|mute|turn off (the )?(mic|microphone)|disable (the )?(mic|microphone))\b/i.test(
+    text,
+  );
+}
+
+function formatWakeCaption(command: string) {
+  return command ? `Hey Vera, ${command}` : "Hey Vera";
+}
+
+function getVideoControlAction(text: string): ChatResponse["action"] | null {
+  const normalized = text.toLowerCase();
+  if (/\b(pause|hold|stop the video|stop video)\b/.test(normalized)) return "pause";
+  if (/\b(play|continue|resume|start the video|start video)\b/.test(normalized)) return "play";
+  if (/\b(rewind|go back|back 10|back ten)\b/.test(normalized)) return "rewind";
+  if (/\b(fast forward|skip ahead|forward 20|forward twenty|next 20|next twenty)\b/.test(normalized)) {
+    return "forward";
+  }
+  return null;
+}
+
+function isSceneGenerationCommand(text: string) {
+  return /\b(step into|enter|generate|open|create).*\b(scene|ciniverse|moment)\b|\bstep into this scene\b/i.test(
     text,
   );
 }
@@ -338,12 +359,16 @@ function App() {
       }
 
       const heard = (final || interim).trim();
-      if (heard) {
-        setHeardText(heard);
-        setCaption(heard);
+      const heardWake = heard ? parseWakeCommand(heard) : null;
+      if (heardWake?.isWakeInvocation) {
+        setHeardText(formatWakeCaption(heardWake.command));
+        setCaption(heardWake.command ? heardWake.command : "Listening...");
       }
       if (final.trim()) {
-        handleUtterance(final.trim());
+        const finalWake = parseWakeCommand(final.trim());
+        if (finalWake.isWakeInvocation) {
+          handleUtterance(formatWakeCaption(finalWake.command));
+        }
       }
     };
 
@@ -542,6 +567,29 @@ function App() {
 
   async function handleUtterancePayload(utterance: string) {
     setVoiceState("thinking");
+
+    const videoAction = getVideoControlAction(utterance);
+    if (videoAction && mode === "watching") {
+      handleVideoControl(videoAction);
+      setLastIntent("video_control");
+      speakResponse(
+        videoAction === "play"
+          ? "Playing."
+          : videoAction === "pause"
+            ? "Paused."
+            : videoAction === "rewind"
+              ? "Rewinding 10 seconds."
+              : "Skipping ahead 20 seconds.",
+        "CineVerse",
+      );
+      return;
+    }
+
+    if (isSceneGenerationCommand(utterance) && mode === "watching") {
+      setLastIntent("scene_generation");
+      runGeneration();
+      return;
+    }
 
     if (mode === "in-scene") {
       const inSceneNavigation = matchInSceneNavigationCommand(utterance);
