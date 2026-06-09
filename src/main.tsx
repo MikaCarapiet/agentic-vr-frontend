@@ -590,31 +590,74 @@ function App() {
     speakResponse("The duel has opened. Speak, and the scene will answer.", "Director");
   }
 
-  function handleVideoControl(action: ChatResponse["action"]) {
+  async function playVideo() {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video) return false;
+
+    if (video.ended) {
+      video.currentTime = 0;
+    }
+
+    try {
+      await video.play();
+    } catch {
+      try {
+        video.muted = true;
+        await video.play();
+      } catch {
+        setIsPlaying(false);
+        showTool({ label: "Playback blocked", detail: "Tap Play once to resume" });
+        return false;
+      }
+    }
+
+    setIsPlaying(!video.paused);
+    return !video.paused;
+  }
+
+  function pauseVideo() {
+    const video = videoRef.current;
+    if (!video) return false;
+
+    video.pause();
+    setIsPlaying(false);
+    return video.paused;
+  }
+
+  async function handleVideoControl(action: ChatResponse["action"]) {
+    const video = videoRef.current;
+    if (!video) return false;
 
     if (action === "pause") {
-      video.pause();
-      setIsPlaying(false);
-      showTool({ label: "Tool: pause video" });
+      const paused = pauseVideo();
+      showTool({ label: paused ? "Tool: pause video" : "Pause unavailable" });
+      return paused;
     }
+
     if (action === "play") {
-      void video.play();
-      setIsPlaying(true);
-      showTool({ label: "Tool: play video" });
+      const played = await playVideo();
+      if (played) showTool({ label: "Tool: play video" });
+      return played;
     }
+
     if (action === "rewind") {
       video.currentTime = Math.max(0, video.currentTime - 10);
+      setCurrentTime(video.currentTime);
       showTool({ label: "Tool: rewind", detail: "-10 seconds" });
+      return true;
     }
+
     if (action === "forward") {
       video.currentTime = Math.min(
         duration || video.duration || video.currentTime + 20,
         video.currentTime + 20,
       );
+      setCurrentTime(video.currentTime);
       showTool({ label: "Tool: fast forward", detail: "+20 seconds" });
+      return true;
     }
+
+    return false;
   }
 
   function activateVeraWakePrompt() {
@@ -631,10 +674,12 @@ function App() {
 
     const videoAction = getVideoControlAction(utterance);
     if (videoAction && mode === "watching") {
-      handleVideoControl(videoAction);
+      const handled = await handleVideoControl(videoAction);
       setLastIntent("video_control");
       speakResponse(
-        videoAction === "play"
+        !handled
+          ? "Playback needs a tap first."
+          : videoAction === "play"
           ? "Playing."
           : videoAction === "pause"
             ? "Paused."
@@ -700,7 +745,7 @@ function App() {
     if (routed.targetAgentId) setActiveAgentId(routed.targetAgentId);
 
     if (routed.intent === "video_control") {
-      handleVideoControl(routed.action);
+      await handleVideoControl(routed.action);
       speakResponse(routed.response ?? "Done.", "CineVerse");
       return;
     }
@@ -782,15 +827,13 @@ function App() {
     }
   }
 
-  function togglePlayback() {
+  async function togglePlayback() {
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
-      void video.play();
-      setIsPlaying(true);
+      await playVideo();
     } else {
-      video.pause();
-      setIsPlaying(false);
+      pauseVideo();
     }
   }
 
