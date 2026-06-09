@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
   analyzeScene,
+  createRealtimeTranscriptionToken,
   findCollectible,
   sendChat,
   type AgentTrace,
@@ -11,6 +12,11 @@ import {
   type Intent,
 } from "./sceneverseApi";
 import { logAppEvent } from "./appLogger";
+import {
+  isOpenAIRealtimeTranscriptionSupported,
+  OpenAIRealtimeTranscriptionInput,
+  type VoiceInputController,
+} from "./openaiRealtimeTranscription";
 import { routeUtterance } from "./sceneRouter";
 import "./styles.css";
 import Landing from "./Landing";
@@ -203,7 +209,7 @@ function formatTime(seconds: number) {
 
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const voiceInputRef = useRef<VoiceInputController | null>(null);
   const voiceEnabledRef = useRef(true);
   const veraSessionActiveRef = useRef(false);
   const generationTimerRef = useRef<number | null>(null);
@@ -295,8 +301,8 @@ function App() {
       if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
       if (voiceRestartTimerRef.current) window.clearTimeout(voiceRestartTimerRef.current);
       if (hudTimerRef.current) window.clearTimeout(hudTimerRef.current);
-      recognitionRef.current?.abort?.();
-      recognitionRef.current?.stop();
+      voiceInputRef.current?.abort?.();
+      voiceInputRef.current?.stop();
     };
   }, []);
 
@@ -313,66 +319,157 @@ function App() {
     revealHud();
   }, []);
 
-  useEffect(() => {
-    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    if (!Recognition) {
-      setVoiceSupported(false);
-      setVoiceState("idle");
-      setCaption("Voice prototype unavailable. Use the guide prompts.");
-      return;
+  function updateHeardTranscript(text: string) {
+    const heard = text.trim();
+    const heardWake = heard ? parseWakeCommand(heard) : null;
+    if (veraSessionActiveRef.current && heard) {
+      setHeardText(heard);
+      setCaption(heard);
+    } else if (heardWake?.isWakeInvocation) {
+      setHeardText(formatWakeCaption(heardWake.command));
+      setCaption(heardWake.command ? heardWake.command : "Listening...");
     }
+  }
 
-    const recognition = new Recognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognition.onstart = () => {
-      if (voiceEnabledRef.current) setVoiceState("listening");
-    };
-    recognition.onerror = () => {
+  function startVoiceInput(controller = voiceInputRef.current) {
+    if (!controller || !voiceEnabledRef.current) return;
+
+    try {
+      const result = controller.start();
+      if (result instanceof Promise) {
+        void result.catch(() => {
+          setVoiceState(voiceEnabledRef.current ? "error" : "idle");
+        });
+      }
+    } catch {
       setVoiceState(voiceEnabledRef.current ? "error" : "idle");
-    };
-    recognition.onend = () => {
-      if (recognitionRef.current && voiceEnabledRef.current) {
-        try {
-          recognition.start();
-        } catch {
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    function startBrowserSpeechFallback(reason?: string) {
+      const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+      if (!Recognition) {
+        setVoiceSupported(false);
+        setVoiceState("idle");
+        setCaption("Voice prototype unavailable. Use the guide prompts.");
+        return;
+      }
+
+      const recognition = new Recognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+      recognition.onstart = () => {
+        if (voiceEnabledRef.current) setVoiceState("listening");
+      };
+      recognition.onerror = () => {
+        setVoiceState(voiceEnabledRef.current ? "error" : "idle");
+      };
+      recognition.onend = () => {
+        if (voiceInputRef.current && voiceEnabledRef.current) {
+          startVoiceInput(voiceInputRef.current);
+        } else {
           setVoiceState("idle");
         }
-      } else {
-        setVoiceState("idle");
-      }
-    };
-    recognition.onresult = (event) => {
-      let interim = "";
-      let final = "";
+      };
+      recognition.onresult = (event) => {
+        let interim = "";
+        let final = "";
 
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        if (result.isFinal) final += result[0].transcript;
-        else interim += result[0].transcript;
-      }
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          if (result.isFinal) final += result[0].transcript;
+          else interim += result[0].transcript;
+        }
 
-      const heard = (final || interim).trim();
-      const heardWake = heard ? parseWakeCommand(heard) : null;
-      if (veraSessionActiveRef.current && heard) {
-        setHeardText(heard);
-        setCaption(heard);
-      } else if (heardWake?.isWakeInvocation) {
-        setHeardText(formatWakeCaption(heardWake.command));
-        setCaption(heardWake.command ? heardWake.command : "Listening...");
-      }
-      if (final.trim()) {
-        handleVoiceFinal(final.trim());
-      }
-    };
+        updateHeardTranscript(final || interim);
+        if (final.trim()) {
+          handleVoiceFinal(final.trim());
+        }
+      };
 
-    recognitionRef.current = recognition;
-    try {
-      if (voiceEnabledRef.current) recognition.start();
-    } catch {
-      setVoiceState("idle");
+      voiceInputRef.current = {
+        provider: "browser-speech",
+        start: () => recognition.start(),
+        stop: () => recognition.stop(),
+        abort: () => recognition.abort?.(),
+      };
+      logAppEvent({
+        category: "voice",
+        label: "Browser speech fallback",
+        detail: reason ?? "OpenAI Realtime unavailable",
+        status: "fallback",
+      });
+      startVoiceInput();
     }
+
+    async function startOpenAIRealtime() {
+      if (!isOpenAIRealtimeTranscriptionSupported()) {
+        startBrowserSpeechFallback("WebRTC microphone capture unavailable");
+        return;
+      }
+
+      const realtimeInput = new OpenAIRealtimeTranscriptionInput({
+        getToken: createRealtimeTranscriptionToken,
+        onReady: (token) => {
+          if (cancelled || !voiceEnabledRef.current) return;
+          setVoiceSupported(true);
+          setVoiceState("listening");
+          logAppEvent({
+            category: "voice",
+            label: "OpenAI Realtime STT connected",
+            detail: `${token.model}, silence ${token.turnDetection.silenceDurationMs}ms`,
+            status: "active",
+          });
+        },
+        onSpeechStarted: () => {
+          if (cancelled || !voiceEnabledRef.current) return;
+          setVoiceState("listening");
+        },
+        onSpeechStopped: () => {
+          if (cancelled || !voiceEnabledRef.current) return;
+          setVoiceState(veraSessionActiveRef.current ? "thinking" : "listening");
+        },
+        onTranscriptDelta: (text) => {
+          if (cancelled || !voiceEnabledRef.current) return;
+          updateHeardTranscript(text);
+        },
+        onTranscriptCompleted: (text) => {
+          if (cancelled || !voiceEnabledRef.current) return;
+          handleVoiceFinal(text);
+        },
+        onError: (message) => {
+          if (cancelled) return;
+          logAppEvent({
+            category: "voice",
+            label: "OpenAI Realtime STT error",
+            detail: message,
+            status: "error",
+          });
+          setVoiceState(voiceEnabledRef.current ? "error" : "idle");
+        },
+      });
+
+      voiceInputRef.current = realtimeInput;
+      try {
+        if (voiceEnabledRef.current) await realtimeInput.start();
+      } catch (error) {
+        if (cancelled) return;
+        startBrowserSpeechFallback(error instanceof Error ? error.message : "OpenAI Realtime setup failed");
+      }
+    }
+
+    void startOpenAIRealtime();
+
+    return () => {
+      cancelled = true;
+      voiceInputRef.current?.abort?.();
+      voiceInputRef.current?.stop();
+      voiceInputRef.current = null;
+    };
   }, []);
 
   function pushHistory(item: HistoryItem) {
@@ -425,8 +522,8 @@ function App() {
   }
 
   function restartStandbyRecognition() {
-    const recognition = recognitionRef.current;
-    if (!recognition || !voiceEnabledRef.current) return;
+    const voiceInput = voiceInputRef.current;
+    if (!voiceInput || !voiceEnabledRef.current) return;
 
     if (voiceRestartTimerRef.current) {
       window.clearTimeout(voiceRestartTimerRef.current);
@@ -434,21 +531,17 @@ function App() {
     }
 
     try {
-      recognition.abort?.();
-      recognition.stop();
+      voiceInput.abort?.();
+      voiceInput.stop();
     } catch {
-      // Recognition may already be ending; the delayed start below re-arms standby.
+      // The delayed start below re-arms standby if the provider is already closing.
     }
 
     voiceRestartTimerRef.current = window.setTimeout(() => {
       voiceRestartTimerRef.current = null;
-      if (!voiceEnabledRef.current || recognitionRef.current !== recognition) return;
+      if (!voiceEnabledRef.current || voiceInputRef.current !== voiceInput) return;
 
-      try {
-        recognition.start();
-      } catch {
-        setVoiceState("listening");
-      }
+      startVoiceInput(voiceInput);
     }, 180);
   }
 
@@ -475,8 +568,8 @@ function App() {
     setVeraSessionActive(false);
     setVoiceState("idle");
     setCaption("");
-    recognitionRef.current?.abort?.();
-    recognitionRef.current?.stop();
+    voiceInputRef.current?.abort?.();
+    voiceInputRef.current?.stop();
     logAppEvent({ category: "voice", label: "Vera muted", detail: "manual mute", status: "done" });
     showTool({ label: "Vera muted", detail: "Click Vera to listen again" });
   }
@@ -498,11 +591,7 @@ function App() {
     setVeraSessionActive(false);
     setVoiceState("listening");
     setCaption("Say “Hey Vera” to activate.");
-    try {
-      recognitionRef.current?.start();
-    } catch {
-      setVoiceState("listening");
-    }
+    startVoiceInput();
     logAppEvent({ category: "voice", label: "Vera listening", detail: "standby wake phrase mode", status: "active" });
     showTool({ label: "Vera listening", detail: "Say “Hey Vera” to activate" });
   }

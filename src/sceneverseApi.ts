@@ -79,6 +79,19 @@ type BackendResearchResponse = {
   recommendedContext: string;
 };
 
+export type RealtimeTranscriptionToken = {
+  value: string;
+  expiresAt: number;
+  model: string;
+  provider: "openai";
+  turnDetection: {
+    type: "server_vad";
+    threshold: number;
+    prefixPaddingMs: number;
+    silenceDurationMs: number;
+  };
+};
+
 export type SceneAnalysisRequest = {
   frame: string | null;
   timestamp: number;
@@ -137,11 +150,15 @@ export type CommerceCollectible = {
 const apiBaseUrl = (import.meta.env.VITE_SCENEVERSE_API_BASE_URL ?? "/backend").replace(/\/$/, "");
 const apiTimeoutMs = 2400;
 
-async function postJson<TResponse>(path: string, payload: unknown): Promise<TResponse | null> {
+async function postJson<TResponse>(
+  path: string,
+  payload: unknown,
+  timeoutMs = apiTimeoutMs,
+): Promise<TResponse | null> {
   if (!apiBaseUrl) return null;
 
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), apiTimeoutMs);
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     logAppEvent({
@@ -184,6 +201,10 @@ async function postJson<TResponse>(path: string, payload: unknown): Promise<TRes
   } finally {
     window.clearTimeout(timeoutId);
   }
+}
+
+export async function createRealtimeTranscriptionToken(): Promise<RealtimeTranscriptionToken | null> {
+  return postJson<RealtimeTranscriptionToken>("/api/realtime/transcription-token", {}, 10000);
 }
 
 function normalizeTrace(trace: BackendAgentTrace[]): AgentTrace[] {
