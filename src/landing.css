@@ -337,6 +337,23 @@
   margin-bottom: 20px;
 }
 
+.lnd-section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lnd-loading-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(120, 216, 255, 0.18);
+  border-radius: 999px;
+  color: #78d8ff;
+  font-size: 0.66rem;
+}
+
 .lnd-section-header h2 {
   margin: 0;
   color: #f8fafc;
@@ -436,6 +453,20 @@
   align-content: space-between;
   min-height: 124px;
   padding: 16px;
+  text-align: left;
+}
+
+button.lnd-universe-card {
+  cursor: pointer;
+}
+
+button.lnd-universe-card:hover {
+  border-color: rgba(120, 216, 255, 0.32);
+  background: rgba(7, 16, 30, 0.78);
+}
+
+.lnd-universe-card.muted {
+  opacity: 0.78;
 }
 
 .lnd-universe-card > div:first-child {

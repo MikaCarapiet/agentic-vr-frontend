@@ -1,20 +1,11 @@
 import React, { useEffect, useState } from "react";
+import type { CatalogVideo } from "./videoCatalog";
 import "./landing.css";
 
 type Props = {
-  onEnter: () => void;
-};
-
-const DEMO_VIDEO = {
-  id: "yoda-vader-duel",
-  title: "Yoda vs Vader: The Duel That Never Was",
-  tagline:
-    "A forbidden duel opens inside a misted timeline. Step into the frame, question the characters, and bend the next branch.",
-  genre: "Action · Fantasy · AI Demo",
-  badge: "Featured premiere · AI scene generated",
-  duration: "3 min",
-  year: "2025",
-  agents: ["Yoda", "Vader", "Director"],
+  videos: CatalogVideo[];
+  isLoading?: boolean;
+  onOpenVideo: (videoId: string) => void;
 };
 
 const COMING_SOON = [
@@ -51,6 +42,7 @@ function useVideoThumbnail(src: string, seekTime = 1.5) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    let disposed = false;
     const video = document.createElement("video");
     video.preload = "metadata";
     video.muted = true;
@@ -62,24 +54,45 @@ function useVideoThumbnail(src: string, seekTime = 1.5) {
     });
 
     video.addEventListener("seeked", () => {
+      if (disposed) return;
       const canvas = document.createElement("canvas");
       canvas.width = video.videoWidth || 1280;
       canvas.height = video.videoHeight || 720;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        setDataUrl(canvas.toDataURL("image/jpeg", 0.86));
+        try {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          setDataUrl(canvas.toDataURL("image/jpeg", 0.86));
+        } catch {
+          setDataUrl(null);
+        }
       }
     });
 
+    video.addEventListener("error", () => {
+      if (!disposed) setDataUrl(null);
+    });
+
     video.src = src;
+    return () => {
+      disposed = true;
+      video.removeAttribute("src");
+      video.load();
+    };
   }, [src, seekTime]);
 
   return dataUrl;
 }
 
-export default function Landing({ onEnter }: Props) {
-  const thumbnail = useVideoThumbnail("/demo-duel.mp4", 2);
+export default function Landing({ videos, isLoading = false, onOpenVideo }: Props) {
+  const featuredVideo = videos[0];
+  const secondaryVideos = videos.slice(1, 4);
+  const placeholderCards = COMING_SOON.slice(0, Math.max(0, 3 - secondaryVideos.length));
+  const thumbnail = useVideoThumbnail(featuredVideo.playbackUrl, 2);
+
+  function openFeaturedVideo() {
+    onOpenVideo(featuredVideo.id);
+  }
 
   function scrollToCatalog() {
     document.getElementById("scene-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -94,7 +107,7 @@ export default function Landing({ onEnter }: Props) {
         </div>
         <div className="lnd-nav-actions">
           <span className="lnd-token">100 scene credits</span>
-          <button className="lnd-nav-link" onClick={onEnter}>
+          <button className="lnd-nav-link" onClick={openFeaturedVideo}>
             Enter
           </button>
         </div>
@@ -122,14 +135,14 @@ export default function Landing({ onEnter }: Props) {
           </div>
 
           <div className="lnd-hero-content">
-            <span className="lnd-badge">{DEMO_VIDEO.badge}</span>
+            <span className="lnd-badge">{featuredVideo.badge}</span>
             <h1 id="landing-title" className="lnd-hero-title">
-              {DEMO_VIDEO.title}
+              {featuredVideo.title}
             </h1>
-            <p className="lnd-hero-tagline">{DEMO_VIDEO.tagline}</p>
+            <p className="lnd-hero-tagline">{featuredVideo.tagline}</p>
 
             <div className="lnd-hero-cta">
-              <button className="lnd-btn-primary" onClick={onEnter}>
+              <button className="lnd-btn-primary" onClick={openFeaturedVideo}>
                 Enter experience
               </button>
               <button className="lnd-btn-secondary" onClick={scrollToCatalog}>
@@ -140,7 +153,7 @@ export default function Landing({ onEnter }: Props) {
 
           <aside className="lnd-hero-meta" aria-label="Scene stats">
             <div className="lnd-hero-stat">
-              <strong>3</strong>
+              <strong>{featuredVideo.agents.length}</strong>
               <span>Active agents</span>
             </div>
             <div className="lnd-hero-stat">
@@ -153,27 +166,48 @@ export default function Landing({ onEnter }: Props) {
         <section className="lnd-section lnd-catalog" id="scene-catalog" aria-labelledby="catalog-title">
           <div className="lnd-section-header">
             <h2 id="catalog-title">Growing Universes</h2>
-            <button onClick={onEnter}>View all</button>
+            <div className="lnd-section-actions">
+              {isLoading ? <span className="lnd-loading-pill">Syncing backend</span> : null}
+              <button onClick={scrollToCatalog}>View all</button>
+            </div>
           </div>
 
           <div className="lnd-universe-row">
-            <button className="lnd-premiere-card" onClick={onEnter} aria-label={`Watch ${DEMO_VIDEO.title}`}>
+            <button className="lnd-premiere-card" onClick={openFeaturedVideo} aria-label={`Watch ${featuredVideo.title}`}>
               <div className="lnd-premiere-media">
                 {thumbnail ? (
-                  <img src={thumbnail} alt={DEMO_VIDEO.title} draggable={false} />
+                  <img src={thumbnail} alt={featuredVideo.title} draggable={false} />
                 ) : (
                   <div className="lnd-premiere-loading" />
                 )}
               </div>
               <div className="lnd-premiere-copy">
-                <span>{DEMO_VIDEO.year} · {DEMO_VIDEO.duration}</span>
-                <strong>{DEMO_VIDEO.title}</strong>
-                <em>{DEMO_VIDEO.genre}</em>
+                <span>{featuredVideo.year} · {featuredVideo.duration}</span>
+                <strong>{featuredVideo.title}</strong>
+                <em>{featuredVideo.genre}</em>
               </div>
             </button>
 
-            {COMING_SOON.map((item) => (
-              <article className="lnd-universe-card" key={item.id}>
+            {secondaryVideos.map((item) => (
+              <button
+                className="lnd-universe-card"
+                key={item.id}
+                onClick={() => onOpenVideo(item.id)}
+                aria-label={`Watch ${item.title}`}
+              >
+                <div>
+                  <span>{item.genre}</span>
+                  <strong>{item.title}</strong>
+                </div>
+                <div className="lnd-universe-metric">
+                  <strong>{item.year}</strong>
+                  <span>{item.sourceLabel}</span>
+                </div>
+              </button>
+            ))}
+
+            {placeholderCards.map((item) => (
+              <article className="lnd-universe-card muted" key={item.id}>
                 <div>
                   <span>{item.genre}</span>
                   <strong>{item.title}</strong>
@@ -190,15 +224,15 @@ export default function Landing({ onEnter }: Props) {
         <section className="lnd-section lnd-paths" aria-labelledby="paths-title">
           <div className="lnd-section-header">
             <h2 id="paths-title">Hot Branches</h2>
-            <button onClick={onEnter}>More</button>
+            <button onClick={openFeaturedVideo}>More</button>
           </div>
 
           <div className="lnd-path-list">
             {SCENE_PATHS.map((path, index) => (
-              <button className="lnd-path-item" key={path} onClick={onEnter}>
+              <button className="lnd-path-item" key={path} onClick={openFeaturedVideo}>
                 <span>{String(index + 1).padStart(2, "0")}</span>
                 <strong>{path}</strong>
-                <em>{DEMO_VIDEO.agents[index] ?? "Director"}</em>
+                <em>{featuredVideo.agents[index] ?? "Director"}</em>
               </button>
             ))}
           </div>

@@ -98,6 +98,7 @@ export type SceneAnalysisRequest = {
   timestamp: number;
   transcriptSegment: string;
   videoMetadata: {
+    videoId?: string;
     title: string;
     source: string;
     duration: number;
@@ -148,8 +149,92 @@ export type CommerceCollectible = {
   recommendedContext: string;
 };
 
+export type VideoAsset = {
+  videoId: string;
+  sourceType: "upload" | "youtube" | "external_url";
+  title: string | null;
+  originalUrl: string | null;
+  originalFilename: string | null;
+  storageBackend: string | null;
+  storageKey: string | null;
+  playbackUrl: string | null;
+  contentType: string | null;
+  fileSizeBytes: number | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VideoListResponse = {
+  items: VideoAsset[];
+  limit: number;
+  offset: number;
+  rowCount: number;
+};
+
 const apiBaseUrl = (import.meta.env.VITE_SCENEVERSE_API_BASE_URL ?? "/backend").replace(/\/$/, "");
 const apiTimeoutMs = 2400;
+
+export function resolveBackendAssetUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (/^(https?:|blob:|data:)/i.test(path)) return path;
+  if (!apiBaseUrl) return path;
+
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${apiBaseUrl}${normalizedPath}`;
+}
+
+async function getJson<TResponse>(path: string, timeoutMs = apiTimeoutMs): Promise<TResponse | null> {
+  if (!apiBaseUrl) return null;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  const url = `${apiBaseUrl}${path}`;
+
+  try {
+    logVeraDebug("api request", { path, url, timeoutMs });
+    logAppEvent({
+      category: "api",
+      label: `GET ${path}`,
+      detail: "request started",
+      status: "active",
+    });
+    const response = await fetch(url, { signal: controller.signal });
+    logVeraDebug("api response", { path, status: response.status, ok: response.ok });
+
+    if (!response.ok) {
+      logAppEvent({
+        category: "api",
+        label: `GET ${path}`,
+        detail: `HTTP ${response.status}`,
+        status: "fallback",
+      });
+      return null;
+    }
+    logAppEvent({
+      category: "api",
+      label: `GET ${path}`,
+      detail: "response received",
+      status: "done",
+    });
+    return (await response.json()) as TResponse;
+  } catch (error) {
+    logVeraDebug("api error", {
+      path,
+      name: error instanceof Error ? error.name : "unknown",
+      message: error instanceof Error ? error.message : String(error),
+    });
+    logAppEvent({
+      category: "api",
+      label: `GET ${path}`,
+      detail: error instanceof DOMException && error.name === "AbortError" ? "request timed out" : "request failed",
+      status: "fallback",
+    });
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 async function postJson<TResponse>(
   path: string,
@@ -214,6 +299,18 @@ async function postJson<TResponse>(
 
 export async function createRealtimeTranscriptionToken(): Promise<RealtimeTranscriptionToken | null> {
   return postJson<RealtimeTranscriptionToken>("/api/realtime/transcription-token", {}, 10000);
+}
+
+export async function listVideos(limit = 24, offset = 0): Promise<VideoListResponse | null> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  return getJson<VideoListResponse>(`/api/videos?${params.toString()}`, 8000);
+}
+
+export async function getVideo(videoId: string): Promise<VideoAsset | null> {
+  return getJson<VideoAsset>(`/api/videos/${encodeURIComponent(videoId)}`, 8000);
 }
 
 function normalizeTrace(trace: BackendAgentTrace[]): AgentTrace[] {

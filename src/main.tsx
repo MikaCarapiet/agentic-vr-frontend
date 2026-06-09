@@ -4,6 +4,8 @@ import {
   analyzeScene,
   createRealtimeTranscriptionToken,
   findCollectible,
+  getVideo,
+  listVideos,
   sendChat,
   type AgentTrace,
   type AppMode,
@@ -22,8 +24,12 @@ import { logVeraDebug } from "./veraDebug";
 import "./styles.css";
 import Landing from "./Landing";
 import LogsPage from "./LogsPage";
-
-const videoSrc = "/demo-duel.mp4";
+import {
+  buildCatalogVideos,
+  catalogVideoFromAsset,
+  FALLBACK_CATALOG_VIDEO,
+  type CatalogVideo,
+} from "./videoCatalog";
 
 type VoiceState = "idle" | "listening" | "thinking" | "speaking" | "error";
 
@@ -184,10 +190,11 @@ function formatTime(seconds: number) {
 }
 
 type AppProps = {
+  video: CatalogVideo;
   onExit: () => void;
 };
 
-function App({ onExit }: AppProps) {
+function App({ video: sceneVideo, onExit }: AppProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const voiceInputRef = useRef<VoiceInputController | null>(null);
   const handleVoiceFinalRef = useRef<(utterance: string) => void>(() => {});
@@ -669,8 +676,9 @@ function App({ onExit }: AppProps) {
       transcriptSegment:
         "Two powerful figures face each other in a misted forest. A green blade glows between restraint and threat.",
       videoMetadata: {
-        title: "Yoda vs Vader: The Duel That Never Was",
-        source: videoSrc,
+        videoId: sceneVideo.id,
+        title: sceneVideo.title,
+        source: sceneVideo.playbackUrl,
         duration: duration || video?.duration || 0,
       },
     });
@@ -1116,8 +1124,8 @@ function App({ onExit }: AppProps) {
         className={layerClass("scene-video", "scene-video")}
         data-layer-id="scene-video"
         data-layer-label="Scene video"
-        aria-label="Scene video"
-        src={videoSrc}
+        aria-label={sceneVideo.title}
+        src={sceneVideo.playbackUrl}
         playsInline
         preload="metadata"
         onClick={() => selectLayer("scene-video")}
@@ -1546,25 +1554,147 @@ function App({ onExit }: AppProps) {
   );
 }
 
+type AppRoute =
+  | { name: "logs" }
+  | { name: "videos" }
+  | { name: "video"; videoId: string };
+
+function parseAppRoute(): AppRoute {
+  const searchParams = new URLSearchParams(window.location.search);
+  if (window.location.pathname === "/logs" || searchParams.has("logs")) {
+    return { name: "logs" };
+  }
+
+  const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  const videoMatch = pathname.match(/^\/video\/([^/]+)$/);
+  if (videoMatch?.[1]) {
+    return { name: "video", videoId: decodeURIComponent(videoMatch[1]) };
+  }
+
+  return { name: "videos" };
+}
+
+function navigateTo(path: string, replace = false) {
+  window.history[replace ? "replaceState" : "pushState"]({}, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+function videoPath(videoId: string) {
+  return `/video/${encodeURIComponent(videoId)}`;
+}
+
 function Root() {
-  const isLogsPage =
-    window.location.pathname === "/logs" || new URLSearchParams(window.location.search).has("logs");
-  const [inExperience, setInExperience] = useState(false);
+  const [route, setRoute] = useState<AppRoute>(() => parseAppRoute());
+  const [videos, setVideos] = useState<CatalogVideo[]>([FALLBACK_CATALOG_VIDEO]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [directVideo, setDirectVideo] = useState<CatalogVideo | null>(null);
+  const [directVideoLoading, setDirectVideoLoading] = useState(false);
+  const catalogLoadedRef = useRef(false);
 
   useEffect(() => {
-    document.body.style.overflow = inExperience || isLogsPage ? "hidden" : "auto";
-    return () => { document.body.style.overflow = ""; };
-  }, [inExperience, isLogsPage]);
+    const handleRouteChange = () => setRoute(parseAppRoute());
+    window.addEventListener("popstate", handleRouteChange);
+    return () => window.removeEventListener("popstate", handleRouteChange);
+  }, []);
 
-  if (isLogsPage) {
+  useEffect(() => {
+    if (window.location.pathname === "/" && route.name === "videos") {
+      navigateTo("/videos", true);
+    }
+  }, [route.name]);
+
+  useEffect(() => {
+    document.body.style.overflow = route.name === "video" || route.name === "logs" ? "hidden" : "auto";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [route.name]);
+
+  useEffect(() => {
+    if (route.name === "logs" || catalogLoadedRef.current) return;
+
+    catalogLoadedRef.current = true;
+    let cancelled = false;
+    setCatalogLoading(true);
+
+    listVideos(24)
+      .then((response) => {
+        if (cancelled) return;
+        setVideos(buildCatalogVideos(response?.items ?? []));
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [route.name]);
+
+  useEffect(() => {
+    if (route.name !== "video") {
+      setDirectVideo(null);
+      setDirectVideoLoading(false);
+      return;
+    }
+
+    if (route.videoId === FALLBACK_CATALOG_VIDEO.id || videos.some((video) => video.id === route.videoId)) {
+      setDirectVideo(null);
+      setDirectVideoLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setDirectVideo(null);
+    setDirectVideoLoading(true);
+
+    getVideo(route.videoId)
+      .then((asset) => {
+        if (cancelled) return;
+        const resolvedVideo = asset ? catalogVideoFromAsset(asset) : null;
+        if (!resolvedVideo) {
+          navigateTo("/videos", true);
+          return;
+        }
+        setDirectVideo(resolvedVideo);
+      })
+      .finally(() => {
+        if (!cancelled) setDirectVideoLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [route, videos]);
+
+  if (route.name === "logs") {
     return <LogsPage />;
   }
 
-  if (!inExperience) {
-    return <Landing onEnter={() => setInExperience(true)} />;
+  if (route.name === "videos") {
+    return (
+      <Landing
+        videos={videos}
+        isLoading={catalogLoading}
+        onOpenVideo={(videoId) => navigateTo(videoPath(videoId))}
+      />
+    );
   }
 
-  return <App onExit={() => setInExperience(false)} />;
+  const activeVideo =
+    videos.find((video) => video.id === route.videoId) ??
+    directVideo ??
+    (route.videoId === FALLBACK_CATALOG_VIDEO.id ? FALLBACK_CATALOG_VIDEO : null);
+
+  if (!activeVideo) {
+    return (
+      <main className="route-loading" aria-live="polite">
+        <span>{directVideoLoading ? "Loading video..." : "Video unavailable"}</span>
+      </main>
+    );
+  }
+
+  return <App key={activeVideo.id} video={activeVideo} onExit={() => navigateTo("/videos")} />;
 }
 
 const rootElement = document.getElementById("root") as HTMLElement & {
