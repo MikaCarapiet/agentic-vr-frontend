@@ -1275,8 +1275,7 @@ function App() {
       <section className="orientation-lock" aria-live="polite" aria-label="Rotate device prompt">
         <div className="orientation-lock-card">
           <div className="phone-rotate-mark" aria-hidden="true">
-            <span />
-            <span />
+            <span className="rotate-arrow" />
           </div>
           <span>Landscape required</span>
           <strong>Rotate your phone</strong>
