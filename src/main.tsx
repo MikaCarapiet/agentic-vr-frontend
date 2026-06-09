@@ -207,15 +207,21 @@ function formatTime(seconds: number) {
   return `${minutes}:${remaining}`;
 }
 
-function App() {
+type AppProps = {
+  onExit: () => void;
+};
+
+function App({ onExit }: AppProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const voiceInputRef = useRef<VoiceInputController | null>(null);
+  const handleVoiceFinalRef = useRef<(utterance: string) => void>(() => {});
   const voiceEnabledRef = useRef(true);
   const veraSessionActiveRef = useRef(false);
   const generationTimerRef = useRef<number | null>(null);
   const responseTimerRef = useRef<number | null>(null);
   const voiceRestartTimerRef = useRef<number | null>(null);
   const hudTimerRef = useRef<number | null>(null);
+  const isScrubbingRef = useRef(false);
 
   const [mode, setMode] = useState<AppMode>("watching");
   const [hudVisible, setHudVisible] = useState(true);
@@ -387,7 +393,7 @@ function App() {
 
         updateHeardTranscript(final || interim);
         if (final.trim()) {
-          handleVoiceFinal(final.trim());
+          handleVoiceFinalRef.current(final.trim());
         }
       };
 
@@ -439,7 +445,7 @@ function App() {
         },
         onTranscriptCompleted: (text) => {
           if (cancelled || !voiceEnabledRef.current) return;
-          handleVoiceFinal(text);
+          handleVoiceFinalRef.current(text);
         },
         onError: (message) => {
           if (cancelled) return;
@@ -759,6 +765,31 @@ function App() {
     return video.paused;
   }
 
+  function seekVideo(nextTime: number) {
+    const video = videoRef.current;
+    const safeDuration = duration || video?.duration || 0;
+    if (!video || safeDuration <= 0) return;
+
+    const targetTime = Math.min(Math.max(nextTime, 0), safeDuration);
+    video.currentTime = targetTime;
+    setCurrentTime(targetTime);
+    revealHud();
+  }
+
+  function seekFromTimelinePointer(event: React.PointerEvent<HTMLInputElement>) {
+    const safeDuration = duration || videoRef.current?.duration || 0;
+    if (safeDuration <= 0) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
+    seekVideo(Math.min(Math.max(ratio, 0), 1) * safeDuration);
+  }
+
+  function returnToLanding() {
+    pauseVideo();
+    onExit();
+  }
+
   async function handleVideoControl(action: ChatResponse["action"]) {
     const video = videoRef.current;
     if (!video) return false;
@@ -810,6 +841,13 @@ function App() {
 
   async function handleUtterancePayload(utterance: string) {
     setVoiceState("thinking");
+
+    if (/\b(back to landing|go home|home page|landing page|return home|exit video)\b/i.test(utterance)) {
+      logAppEvent({ category: "system", label: "Return to landing", detail: utterance, status: "done" });
+      showTool({ label: "Returning home", detail: "landing page" });
+      window.setTimeout(returnToLanding, 180);
+      return;
+    }
 
     const route = routeUtterance({
       utterance,
@@ -1016,6 +1054,10 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    handleVoiceFinalRef.current = handleVoiceFinal;
+  });
+
   async function togglePlayback() {
     const video = videoRef.current;
     if (!video) return;
@@ -1062,6 +1104,22 @@ function App() {
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
         onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
       />
+
+      <button
+        className={layerClass("home-button", "home-button")}
+        data-layer-id="home-button"
+        data-layer-label="Back to landing"
+        aria-label="Back to landing page"
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          selectLayer("home-button");
+          returnToLanding();
+        }}
+        onFocus={() => selectLayer("home-button")}
+      >
+        Back
+      </button>
 
       <div className="scene-vignette" />
       <div className="ambient-field" aria-hidden="true">
@@ -1300,24 +1358,49 @@ function App() {
             >
               {formatTime(currentTime)}
             </span>
-            <div
+            <input
+              type="range"
               className={layerClass("timeline", "timeline")}
               aria-label="Video progress"
               data-layer-id="timeline"
               data-layer-label="Video timeline"
-              tabIndex={0}
+              min={0}
+              max={duration || 0}
+              step={0.1}
+              value={Number.isFinite(currentTime) ? currentTime : 0}
+              disabled={!duration}
+              style={{ "--progress": `${progress}%` } as React.CSSProperties}
+              onChange={(event) => seekVideo(Number(event.currentTarget.value))}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectLayer("timeline");
+                isScrubbingRef.current = true;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                seekFromTimelinePointer(event);
+              }}
+              onPointerMove={(event) => {
+                if (!isScrubbingRef.current) return;
+                event.preventDefault();
+                event.stopPropagation();
+                seekFromTimelinePointer(event);
+              }}
+              onPointerUp={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                isScrubbingRef.current = false;
+                event.currentTarget.releasePointerCapture(event.pointerId);
+                seekFromTimelinePointer(event);
+              }}
+              onPointerCancel={() => {
+                isScrubbingRef.current = false;
+              }}
               onClick={(event) => {
                 event.stopPropagation();
                 selectLayer("timeline");
               }}
               onFocus={() => selectLayer("timeline")}
-            >
-              <span
-                data-layer-id="timeline-progress"
-                data-layer-label="Timeline progress"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+            />
             <span
               className={layerClass("timecode", "duration-time")}
               data-layer-id="duration-time"
@@ -1454,7 +1537,7 @@ function Root() {
     return <Landing onEnter={() => setInExperience(true)} />;
   }
 
-  return <App />;
+  return <App onExit={() => setInExperience(false)} />;
 }
 
 const rootElement = document.getElementById("root") as HTMLElement & {

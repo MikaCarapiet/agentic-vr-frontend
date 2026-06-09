@@ -62,6 +62,7 @@ button {
 .tool-card,
 .generation-panel,
 .commerce-card,
+.home-button,
 .bottom-bar {
   transition:
     opacity 680ms ease,
@@ -74,6 +75,7 @@ button {
 .hud-idle .tool-card,
 .hud-idle .generation-panel,
 .hud-idle .commerce-card,
+.hud-idle .home-button,
 .hud-idle .bottom-bar {
   opacity: 0;
   pointer-events: none;
@@ -94,6 +96,10 @@ button {
   transform: translateX(-50%) translateY(-8px);
 }
 
+.hud-idle .home-button {
+  transform: translateY(-6px);
+}
+
 .hud-idle .bottom-bar {
   transform: translateY(18px);
 }
@@ -105,6 +111,27 @@ button {
   height: 100%;
   object-fit: cover;
   background: #050507;
+}
+
+.home-button {
+  position: absolute;
+  z-index: 6;
+  left: 22px;
+  top: 18px;
+  min-height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 0 13px;
+  color: rgba(255, 251, 243, 0.82);
+  background: rgba(5, 5, 7, 0.44);
+  backdrop-filter: blur(14px);
+  font-size: 0.72rem;
+}
+
+.home-button:hover,
+.home-button:focus-visible {
+  border-color: rgba(245, 197, 110, 0.34);
+  color: var(--text);
 }
 
 .scene-vignette {
@@ -941,17 +968,62 @@ button {
 }
 
 .timeline {
+  --progress: 0%;
+  appearance: none;
+  -webkit-appearance: none;
   height: 5px;
-  overflow: hidden;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(90deg, var(--red), var(--gold)) 0 / var(--progress) 100% no-repeat,
+    rgba(255, 255, 255, 0.16);
+  cursor: pointer;
 }
 
-.timeline span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
+.timeline:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.timeline::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.timeline::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -4.5px;
+  border: 2px solid rgba(255, 251, 243, 0.9);
+  border-radius: 50%;
   background: linear-gradient(90deg, var(--red), var(--gold));
+  box-shadow:
+    0 0 0 4px rgba(245, 197, 110, 0.12),
+    0 0 18px rgba(245, 197, 110, 0.3);
+  -webkit-appearance: none;
+}
+
+.timeline::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.timeline::-moz-range-progress {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--red), var(--gold));
+}
+
+.timeline::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 251, 243, 0.9);
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow:
+    0 0 0 4px rgba(245, 197, 110, 0.12),
+    0 0 18px rgba(245, 197, 110, 0.3);
 }
 
 .debug-drawer {

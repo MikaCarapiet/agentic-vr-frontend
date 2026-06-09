@@ -118,18 +118,16 @@ export function routeUtterance({
   const mentionedObject = findMentionedObject(text, sceneObjects);
   const director = agents.find((agent) => agent.id === "director");
 
-  if (mode === "watching") {
-    const videoCommand = videoCommandPatterns.find((command) => command.pattern.test(text));
-    if (videoCommand) {
-      return {
-        kind: "video_control",
-        intent: "video_control",
-        action: videoCommand.action,
-        response: videoCommand.response,
-        tool: { label: "Router: video command", detail: videoCommand.detail },
-        agentTrace: trace(`routed to video tool: ${videoCommand.detail}`),
-      };
-    }
+  const videoCommand = videoCommandPatterns.find((command) => command.pattern.test(text));
+  if (videoCommand) {
+    return {
+      kind: "video_control",
+      intent: "video_control",
+      action: videoCommand.action,
+      response: videoCommand.response,
+      tool: { label: "Router: video command", detail: videoCommand.detail },
+      agentTrace: trace(`routed to video tool: ${videoCommand.detail}`),
+    };
   }
 
   if (
