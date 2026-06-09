@@ -18,6 +18,7 @@ import {
   type VoiceInputController,
 } from "./openaiRealtimeTranscription";
 import { routeUtterance } from "./sceneRouter";
+import { logVeraDebug } from "./veraDebug";
 import "./styles.css";
 import Landing from "./Landing";
 import LogsPage from "./LogsPage";
@@ -151,10 +152,12 @@ function parseWakeCommand(text: string): WakeCommandParse {
   );
 
   if (!match) {
+    logVeraDebug("wake parse miss", { text: trimmed });
     return { isWakeInvocation: false, command: text.trim() };
   }
 
   const rawCommand = (match[1] ?? "").trim();
+  logVeraDebug("wake parse hit", { text: trimmed, command: rawCommand });
   return {
     isWakeInvocation: true,
     command: rawCommand,
@@ -299,6 +302,12 @@ function App({ onExit }: AppProps) {
   function updateHeardTranscript(text: string) {
     const heard = text.trim();
     const heardWake = heard ? parseWakeCommand(heard) : null;
+    logVeraDebug("transcript update", {
+      heard,
+      veraSessionActive: veraSessionActiveRef.current,
+      isWakeInvocation: heardWake?.isWakeInvocation ?? false,
+      command: heardWake?.command,
+    });
     if (veraSessionActiveRef.current && heard) {
       setHeardText(heard);
       setCaption(heard);
@@ -323,12 +332,21 @@ function App({ onExit }: AppProps) {
   }
 
   async function startVoiceInput(controller = voiceInputRef.current) {
+    logVeraDebug("voice start requested", {
+      hasController: Boolean(controller),
+      voiceEnabled: voiceEnabledRef.current,
+    });
     if (!controller || !voiceEnabledRef.current) return false;
 
     try {
       await controller.start();
+      logVeraDebug("voice start succeeded");
       return true;
     } catch (error) {
+      logVeraDebug("voice start failed", {
+        name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message : String(error),
+      });
       setVoiceState(voiceEnabledRef.current ? "error" : "idle");
       setCaption(formatVoiceStartError(error));
       return false;
@@ -339,6 +357,10 @@ function App({ onExit }: AppProps) {
     let cancelled = false;
 
     async function startOpenAIRealtime() {
+      logVeraDebug("voice bootstrap", {
+        supported: isOpenAIRealtimeTranscriptionSupported(),
+        voiceEnabled: voiceEnabledRef.current,
+      });
       if (!isOpenAIRealtimeTranscriptionSupported()) {
         setVoiceSupported(false);
         setVoiceState("idle");
@@ -356,6 +378,10 @@ function App({ onExit }: AppProps) {
         getToken: createRealtimeTranscriptionToken,
         onReady: (token) => {
           if (cancelled || !voiceEnabledRef.current) return;
+          logVeraDebug("voice ready", {
+            model: token.model,
+            turnDetection: token.turnDetection,
+          });
           setVoiceSupported(true);
           setVoiceState("listening");
           logAppEvent({
@@ -367,22 +393,31 @@ function App({ onExit }: AppProps) {
         },
         onSpeechStarted: () => {
           if (cancelled || !voiceEnabledRef.current) return;
+          logVeraDebug("speech started", {
+            veraSessionActive: veraSessionActiveRef.current,
+          });
           setVoiceState("listening");
         },
         onSpeechStopped: () => {
           if (cancelled || !voiceEnabledRef.current) return;
+          logVeraDebug("speech stopped", {
+            veraSessionActive: veraSessionActiveRef.current,
+          });
           setVoiceState(veraSessionActiveRef.current ? "thinking" : "listening");
         },
         onTranscriptDelta: (text) => {
           if (cancelled || !voiceEnabledRef.current) return;
+          logVeraDebug("transcript delta callback", { text });
           updateHeardTranscript(text);
         },
         onTranscriptCompleted: (text) => {
           if (cancelled || !voiceEnabledRef.current) return;
+          logVeraDebug("transcript completed callback", { text });
           handleVoiceFinalRef.current(text);
         },
         onError: (message) => {
           if (cancelled) return;
+          logVeraDebug("voice callback error", { message });
           logAppEvent({
             category: "voice",
             label: "OpenAI Realtime STT error",
@@ -459,6 +494,10 @@ function App({ onExit }: AppProps) {
 
   function activateVeraSession() {
     revealHud();
+    logVeraDebug("vera session activating", {
+      voiceSupported,
+      voiceEnabled: voiceEnabledRef.current,
+    });
     if (voiceRestartTimerRef.current) {
       window.clearTimeout(voiceRestartTimerRef.current);
       voiceRestartTimerRef.current = null;
@@ -473,6 +512,10 @@ function App({ onExit }: AppProps) {
 
   function restartStandbyRecognition() {
     const voiceInput = voiceInputRef.current;
+    logVeraDebug("standby recognition restart requested", {
+      hasVoiceInput: Boolean(voiceInput),
+      voiceEnabled: voiceEnabledRef.current,
+    });
     if (!voiceInput || !voiceEnabledRef.current) return;
 
     if (voiceRestartTimerRef.current) {
@@ -497,6 +540,7 @@ function App({ onExit }: AppProps) {
 
   function deactivateVeraSession() {
     revealHud();
+    logVeraDebug("vera session deactivating");
     veraSessionActiveRef.current = false;
     setVeraSessionActive(false);
     setVoiceState(voiceSupported && voiceEnabledRef.current ? "listening" : "idle");
@@ -508,6 +552,7 @@ function App({ onExit }: AppProps) {
 
   function stopVeraListening() {
     revealHud();
+    logVeraDebug("vera muted");
     voiceEnabledRef.current = false;
     veraSessionActiveRef.current = false;
     if (voiceRestartTimerRef.current) {
@@ -526,6 +571,10 @@ function App({ onExit }: AppProps) {
 
   function startVeraListening() {
     revealHud();
+    logVeraDebug("vera listening requested", {
+      voiceSupported,
+      hasVoiceInput: Boolean(voiceInputRef.current),
+    });
     if (!voiceSupported) {
       showTool({ label: "Voice unavailable", detail: "Use the guide prompts" });
       return;
@@ -664,11 +713,20 @@ function App({ onExit }: AppProps) {
 
     try {
       await video.play();
-    } catch {
+    } catch (error) {
+      logVeraDebug("video play initial failed", {
+        name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message : String(error),
+      });
       try {
         video.muted = true;
         await video.play();
-      } catch {
+        logVeraDebug("video muted play fallback succeeded");
+      } catch (mutedError) {
+        logVeraDebug("video muted play fallback failed", {
+          name: mutedError instanceof Error ? mutedError.name : "unknown",
+          message: mutedError instanceof Error ? mutedError.message : String(mutedError),
+        });
         setIsPlaying(false);
         showTool({ label: "Playback blocked", detail: "Tap Play once to resume" });
         return false;
@@ -715,10 +773,18 @@ function App({ onExit }: AppProps) {
 
   async function handleVideoControl(action: ChatResponse["action"]) {
     const video = videoRef.current;
+    logVeraDebug("video control requested", {
+      action,
+      hasVideo: Boolean(video),
+      paused: video?.paused,
+      currentTime: video?.currentTime,
+      muted: video?.muted,
+    });
     if (!video) return false;
 
     if (action === "pause") {
       const paused = pauseVideo();
+      logVeraDebug("video pause result", { paused });
       logAppEvent({ category: "playback", label: "Pause", detail: paused ? "video paused" : "pause unavailable", status: paused ? "done" : "error" });
       showTool({ label: paused ? "Tool: pause video" : "Pause unavailable" });
       return paused;
@@ -726,6 +792,12 @@ function App({ onExit }: AppProps) {
 
     if (action === "play") {
       const played = await playVideo();
+      logVeraDebug("video play result", {
+        played,
+        paused: video.paused,
+        currentTime: video.currentTime,
+        muted: video.muted,
+      });
       logAppEvent({ category: "playback", label: "Play", detail: played ? "video playing" : "playback blocked", status: played ? "done" : "error" });
       if (played) showTool({ label: "Tool: play video" });
       return played;
@@ -763,6 +835,13 @@ function App({ onExit }: AppProps) {
   }
 
   async function handleUtterancePayload(utterance: string) {
+    logVeraDebug("utterance payload", {
+      utterance,
+      mode,
+      isPlaying,
+      currentTime,
+      veraSessionActive: veraSessionActiveRef.current,
+    });
     setVoiceState("thinking");
 
     if (/\b(back to landing|go home|home page|landing page|return home|exit video)\b/i.test(utterance)) {
@@ -778,6 +857,13 @@ function App({ onExit }: AppProps) {
       agents,
       activeAgentId,
       sceneObjects,
+    });
+    logVeraDebug("route result", {
+      utterance,
+      kind: route.kind,
+      intent: route.intent,
+      action: route.action,
+      tool: route.tool,
     });
     setLastIntent(route.intent);
     setAgentTrace(route.agentTrace);
@@ -930,12 +1016,18 @@ function App({ onExit }: AppProps) {
 
   function handleUtterance(utterance: string) {
     if (!utterance.trim()) return;
+    logVeraDebug("utterance received", {
+      utterance,
+      voiceState,
+      veraSessionActive: veraSessionActiveRef.current,
+    });
     revealHud();
     const parsed = parseWakeCommand(utterance);
     setHeardText(utterance);
     pushHistory({ speaker: "You", text: utterance });
 
     if (parsed.isWakeInvocation) {
+      logVeraDebug("utterance wake invocation", { command: parsed.command });
       if (!parsed.command) {
         activateVeraWakePrompt();
         return;
@@ -962,6 +1054,10 @@ function App({ onExit }: AppProps) {
 
   function handleVoiceFinal(utterance: string) {
     if (!utterance.trim()) return;
+    logVeraDebug("voice final", {
+      utterance,
+      veraSessionActive: veraSessionActiveRef.current,
+    });
 
     if (veraSessionActiveRef.current) {
       handleUtterance(utterance);
@@ -969,6 +1065,10 @@ function App({ onExit }: AppProps) {
     }
 
     const parsed = parseWakeCommand(utterance);
+    logVeraDebug("voice final parsed", {
+      isWakeInvocation: parsed.isWakeInvocation,
+      command: parsed.command,
+    });
     if (!parsed.isWakeInvocation) return;
 
     activateVeraSession();

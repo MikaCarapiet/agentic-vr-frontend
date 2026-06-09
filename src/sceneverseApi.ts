@@ -1,4 +1,5 @@
 import { logAppEvent } from "./appLogger";
+import { logVeraDebug } from "./veraDebug";
 
 export type AppMode = "watching" | "generating" | "in-scene";
 
@@ -159,20 +160,23 @@ async function postJson<TResponse>(
 
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  const url = `${apiBaseUrl}${path}`;
 
   try {
+    logVeraDebug("api request", { path, url, timeoutMs });
     logAppEvent({
       category: "api",
       label: `POST ${path}`,
       detail: "request started",
       status: "active",
     });
-    const response = await fetch(`${apiBaseUrl}${path}`, {
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
+    logVeraDebug("api response", { path, status: response.status, ok: response.ok });
 
     if (!response.ok) {
       logAppEvent({
@@ -191,6 +195,11 @@ async function postJson<TResponse>(
     });
     return (await response.json()) as TResponse;
   } catch (error) {
+    logVeraDebug("api error", {
+      path,
+      name: error instanceof Error ? error.name : "unknown",
+      message: error instanceof Error ? error.message : String(error),
+    });
     logAppEvent({
       category: "api",
       label: `POST ${path}`,

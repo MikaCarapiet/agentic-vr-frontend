@@ -13,7 +13,7 @@ The frontend owns the viewer surface from the MVP architecture diagram:
 - fallback demo state while the AWS backend is still being built
 
 By default, the frontend calls `/backend`, and Vercel rewrites that path to the deployed AWS FastAPI backend. For local backend testing, override `VITE_SCENEVERSE_API_BASE_URL`.
-Local Vite dev also proxies `/backend` to the deployed backend through `vite.config.ts`.
+Local Vite dev also proxies `/backend` through `vite.config.ts`. It defaults to the deployed backend, but can be pointed at a local FastAPI process with `VITE_SCENEVERSE_BACKEND_PROXY_TARGET`.
 
 ## Run locally
 
@@ -23,6 +23,12 @@ npm run dev
 ```
 
 Restart `npm run dev` after changing `vite.config.ts`; Vite does not apply proxy config edits to an already-running dev server.
+
+To debug against a local backend:
+
+```bash
+VITE_SCENEVERSE_BACKEND_PROXY_TARGET=http://localhost:8000 npm run dev
+```
 
 ## Backend contract
 

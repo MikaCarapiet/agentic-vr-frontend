@@ -1,4 +1,5 @@
 import type { RealtimeTranscriptionToken } from "./sceneverseApi";
+import { logVeraDebug } from "./veraDebug";
 
 const realtimeCallsUrl = "https://api.openai.com/v1/realtime/calls";
 
@@ -78,6 +79,9 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
   private mediaStream: MediaStream | null = null;
+  private micLevelContext: AudioContext | null = null;
+  private micLevelSource: MediaStreamAudioSourceNode | null = null;
+  private micLevelTimer: number | null = null;
   private started = false;
   private latestDelta = "";
 
@@ -89,10 +93,16 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
     if (this.started) return;
     this.started = true;
     this.latestDelta = "";
+    logVeraDebug("realtime start requested");
 
     try {
       const peerConnection = new RTCPeerConnection();
       const dataChannel = peerConnection.createDataChannel("oai-events");
+      logVeraDebug("realtime peer created", {
+        signalingState: peerConnection.signalingState,
+        iceGatheringState: peerConnection.iceGatheringState,
+      });
+      logVeraDebug("microphone permission request");
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -100,12 +110,27 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
           autoGainControl: true,
         },
       });
+      logVeraDebug("microphone stream acquired", {
+        audioTracks: mediaStream.getAudioTracks().map((track) => ({
+          enabled: track.enabled,
+          muted: track.muted,
+          readyState: track.readyState,
+          label: track.label,
+        })),
+      });
+      this.startMicLevelDebug(mediaStream);
 
       this.peerConnection = peerConnection;
       this.dataChannel = dataChannel;
       this.mediaStream = mediaStream;
 
       const token = await this.callbacks.getToken();
+      logVeraDebug("realtime token received", {
+        hasToken: Boolean(token?.value),
+        model: token?.model,
+        expiresAt: token?.expiresAt,
+        turnDetection: token?.turnDetection,
+      });
       if (!token?.value) {
         throw new Error("Realtime transcription token is unavailable.");
       }
@@ -114,22 +139,41 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
         peerConnection.addTrack(track, mediaStream);
       });
 
-      dataChannel.addEventListener("open", () => this.callbacks.onReady(token));
+      dataChannel.addEventListener("open", () => {
+        logVeraDebug("realtime data channel open", {
+          readyState: dataChannel.readyState,
+          connectionState: peerConnection.connectionState,
+        });
+        this.callbacks.onReady(token);
+      });
       dataChannel.addEventListener("message", (event) => this.handleMessage(event));
       dataChannel.addEventListener("error", () => {
         if (!this.started) return;
+        logVeraDebug("realtime data channel error");
         this.callbacks.onError("OpenAI realtime data channel error.");
       });
       peerConnection.addEventListener("connectionstatechange", () => {
         if (!this.started) return;
+        logVeraDebug("realtime connection state", {
+          connectionState: peerConnection.connectionState,
+          iceConnectionState: peerConnection.iceConnectionState,
+        });
         if (["failed", "disconnected", "closed"].includes(peerConnection.connectionState)) {
           this.callbacks.onError(`OpenAI realtime connection ${peerConnection.connectionState}.`);
         }
+      });
+      peerConnection.addEventListener("icegatheringstatechange", () => {
+        logVeraDebug("realtime ice gathering state", {
+          iceGatheringState: peerConnection.iceGatheringState,
+        });
       });
 
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
       await waitForIceGatheringComplete(peerConnection);
+      logVeraDebug("realtime local description ready", {
+        iceGatheringState: peerConnection.iceGatheringState,
+      });
 
       const sdp = peerConnection.localDescription?.sdp;
       if (!sdp) {
@@ -148,12 +192,21 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
       if (!response.ok) {
         throw new Error(`OpenAI realtime SDP exchange failed with HTTP ${response.status}.`);
       }
+      logVeraDebug("realtime sdp exchange response", { status: response.status });
 
       await peerConnection.setRemoteDescription({
         type: "answer",
         sdp: await response.text(),
       });
+      logVeraDebug("realtime remote description set", {
+        signalingState: peerConnection.signalingState,
+        connectionState: peerConnection.connectionState,
+      });
     } catch (error) {
+      logVeraDebug("realtime start failed", {
+        name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message : String(error),
+      });
       this.close();
       this.callbacks.onError(describeRealtimeError(error));
       throw error;
@@ -168,13 +221,65 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
     this.close();
   }
 
+  private startMicLevelDebug(mediaStream: MediaStream) {
+    const AudioContextConstructor =
+      window.AudioContext ??
+      (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) {
+      logVeraDebug("microphone level unavailable", { reason: "AudioContext unsupported" });
+      return;
+    }
+
+    try {
+      const audioContext = new AudioContextConstructor();
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 1024;
+      const samples = new Uint8Array(analyser.fftSize);
+      const source = audioContext.createMediaStreamSource(mediaStream);
+      source.connect(analyser);
+
+      this.micLevelContext = audioContext;
+      this.micLevelSource = source;
+      this.micLevelTimer = window.setInterval(() => {
+        analyser.getByteTimeDomainData(samples);
+
+        let sumSquares = 0;
+        let peak = 0;
+        for (const sample of samples) {
+          const normalized = (sample - 128) / 128;
+          sumSquares += normalized * normalized;
+          peak = Math.max(peak, Math.abs(normalized));
+        }
+
+        const rms = Math.sqrt(sumSquares / samples.length);
+        logVeraDebug("microphone level", {
+          rms: Number(rms.toFixed(4)),
+          peak: Number(peak.toFixed(4)),
+          contextState: audioContext.state,
+        });
+      }, 1000);
+    } catch (error) {
+      logVeraDebug("microphone level failed", {
+        name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   private handleMessage(message: MessageEvent<string>) {
     let event: RealtimeEvent;
     try {
       event = JSON.parse(message.data) as RealtimeEvent;
     } catch {
+      logVeraDebug("realtime message parse failed");
       return;
     }
+    logVeraDebug("realtime event", {
+      type: event.type,
+      delta: event.delta,
+      transcript: event.transcript,
+      error: event.error?.message,
+    });
 
     if (event.type === "input_audio_buffer.speech_started") {
       this.latestDelta = "";
@@ -208,11 +313,16 @@ export class OpenAIRealtimeTranscriptionInput implements VoiceInputController {
   private close() {
     this.started = false;
     this.latestDelta = "";
+    if (this.micLevelTimer) window.clearInterval(this.micLevelTimer);
+    void this.micLevelContext?.close();
     this.dataChannel?.close();
     this.peerConnection?.close();
     this.mediaStream?.getTracks().forEach((track) => track.stop());
     this.dataChannel = null;
     this.peerConnection = null;
     this.mediaStream = null;
+    this.micLevelContext = null;
+    this.micLevelSource = null;
+    this.micLevelTimer = null;
   }
 }
