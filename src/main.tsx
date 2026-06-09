@@ -244,7 +244,10 @@ function App({ video: sceneVideo, onExit }: AppProps) {
   const visibleHistory = history.slice(-4);
   const centerCaption =
     caption && caption !== "Say “step into this scene”" ? caption : "";
-  const liveTranscript = voiceState === "listening" ? centerCaption : "";
+  const liveTranscript =
+    voiceState === "listening" || voiceState === "thinking"
+      ? heardText || centerCaption || "Listening..."
+      : centerCaption;
   const scenePrompts = useMemo(() => {
     const characterAgents = agents.filter((agent) => agent.id !== "director");
     const primary = characterAgents[0]?.name ?? "the closest character";
@@ -309,6 +312,8 @@ function App({ video: sceneVideo, onExit }: AppProps) {
 
   function updateHeardTranscript(text: string) {
     const heard = text.trim();
+    if (!heard) return;
+
     const heardWake = heard ? parseWakeCommand(heard) : null;
     logVeraDebug("transcript update", {
       heard,
@@ -316,9 +321,11 @@ function App({ video: sceneVideo, onExit }: AppProps) {
       isWakeInvocation: heardWake?.isWakeInvocation ?? false,
       command: heardWake?.command,
     });
+    setHeardText(heard);
+    setCaption(heard);
+
     if (veraSessionActiveRef.current && heard) {
-      setHeardText(heard);
-      setCaption(heard);
+      return;
     } else if (heardWake?.isWakeInvocation) {
       setHeardText(formatWakeCaption(heardWake.command));
       setCaption(heardWake.command ? heardWake.command : "Listening...");
@@ -421,6 +428,21 @@ function App({ video: sceneVideo, onExit }: AppProps) {
         onTranscriptCompleted: (text) => {
           if (cancelled || !voiceEnabledRef.current) return;
           logVeraDebug("transcript completed callback", { text });
+          const transcript = text.trim();
+          if (!transcript) return;
+          const wake = parseWakeCommand(transcript);
+          updateHeardTranscript(transcript);
+          logAppEvent({
+            category: "voice",
+            label: wake.isWakeInvocation ? "Wake phrase heard" : "OpenAI transcript final",
+            detail: transcript,
+            status: "done",
+            metadata: {
+              wakePhrase: wake.isWakeInvocation,
+              command: wake.command,
+              veraSessionActive: veraSessionActiveRef.current,
+            },
+          });
           handleVoiceFinalRef.current(text);
         },
         onError: (message) => {
@@ -1282,7 +1304,7 @@ function App({ video: sceneVideo, onExit }: AppProps) {
               }}
               onFocus={() => selectLayer("live-transcript")}
             >
-              <strong>You</strong>
+              <strong>Live transcript</strong>
               <p>{liveTranscript}</p>
             </article>
           ) : null}
