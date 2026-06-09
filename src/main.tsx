@@ -1070,9 +1070,10 @@ function App() {
           {visibleHistory.map((item, index) => {
             const speakerAgentId = resolveAgentIdBySpeaker(item.speaker);
             const isActiveSpeaker = Boolean(speakerAgentId && index === latestSpeakerHistoryIndex);
+            const speakerClass = item.speaker.toLowerCase().replace(/[^a-z0-9]+/g, "-");
             return (
             <article
-              className={`${layerClass("history-item", `history-item-${index}`)} ${
+              className={`${layerClass("history-item", `history-item-${index}`)} history-item-speaker-${speakerClass} ${
                 isActiveSpeaker ? "speaker-highlight" : ""
               }`}
               data-layer-id={`history-item-${index}`}
