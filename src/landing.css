@@ -406,7 +406,6 @@
   min-height: 124px;
   padding: 10px;
   text-align: left;
-  cursor: pointer;
 }
 
 .lnd-premiere-card:hover,
@@ -478,11 +477,7 @@
   text-align: left;
 }
 
-button.lnd-universe-card {
-  cursor: pointer;
-}
-
-button.lnd-universe-card:hover {
+.lnd-universe-card:not(.muted):hover {
   border-color: rgba(120, 216, 255, 0.32);
   background: rgba(7, 16, 30, 0.78);
 }
@@ -505,6 +500,53 @@ button.lnd-universe-card:hover {
   color: #78d8ff;
   font-size: 1.45rem;
   font-weight: 300;
+}
+
+.lnd-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lnd-card-preview,
+.lnd-card-watch {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.lnd-card-preview {
+  border: 1px solid rgba(226, 232, 240, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  color: #94a3b8;
+}
+
+.lnd-card-watch {
+  justify-self: start;
+  border: 1px solid rgba(120, 216, 255, 0.68);
+  background: #78d8ff;
+  color: #020617;
+}
+
+.lnd-card-preview:hover,
+.lnd-card-watch:hover {
+  transform: translateY(-1px);
+}
+
+.lnd-card-preview:hover {
+  border-color: rgba(226, 232, 240, 0.34);
+  color: #e2e8f0;
+}
+
+.lnd-card-watch:hover {
+  border-color: #b7ecff;
+  background: #b7ecff;
 }
 
 @keyframes lndHeroImageIn {
