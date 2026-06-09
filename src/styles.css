@@ -973,50 +973,47 @@ button {
   position: relative;
   display: grid;
   place-items: center;
-  width: 78px;
-  height: 78px;
+  width: 92px;
+  height: 64px;
   margin-bottom: 4px;
-  filter: drop-shadow(0 0 18px rgba(127, 198, 255, 0.16));
+  filter: drop-shadow(0 0 16px rgba(127, 198, 255, 0.12));
 }
 
 .phone-rotate-mark::before {
-  width: 30px;
-  height: 48px;
+  width: 58px;
+  height: 34px;
   border: 2px solid rgba(213, 237, 255, 0.82);
-  border-radius: 9px;
+  border-radius: 10px;
   content: "";
   box-shadow:
-    inset 0 -5px 0 rgba(213, 237, 255, 0.08),
+    inset -5px 0 0 rgba(213, 237, 255, 0.08),
     0 0 14px rgba(127, 198, 255, 0.14);
-  animation: minimalPhoneTilt 2.8s ease-in-out infinite;
 }
 
 .phone-rotate-mark::after {
   position: absolute;
-  right: 15px;
-  bottom: 19px;
+  right: 14px;
+  top: 14px;
   width: 9px;
   height: 9px;
   border-right: 2px solid rgba(245, 197, 110, 0.82);
   border-bottom: 2px solid rgba(245, 197, 110, 0.82);
   content: "";
-  transform: rotate(-38deg);
-  animation: minimalArrowHead 2.8s ease-in-out infinite;
+  transform: rotate(-34deg);
 }
 
 .rotate-arrow {
   position: absolute;
   left: 50%;
-  top: 50%;
-  width: 56px;
-  height: 56px;
+  top: 1px;
+  width: 62px;
+  height: 30px;
   border: 2px solid transparent;
   border-top-color: rgba(245, 197, 110, 0.66);
-  border-right-color: rgba(127, 198, 255, 0.38);
   border-radius: 50%;
   pointer-events: none;
-  transform: translate(-50%, -50%) rotate(-34deg);
-  animation: minimalArrowSweep 2.8s ease-in-out infinite;
+  transform: translateX(-50%);
+  animation: minimalArrowPulse 2.6s ease-in-out infinite;
 }
 
 .trace-list {
@@ -1159,40 +1156,14 @@ button {
   }
 }
 
-@keyframes minimalPhoneTilt {
-  0%,
-  100% {
-    transform: rotate(0deg);
-  }
-
-  45% {
-    transform: rotate(90deg);
-  }
-}
-
-@keyframes minimalArrowSweep {
+@keyframes minimalArrowPulse {
   0%,
   100% {
     opacity: 0.48;
-    transform: translate(-50%, -50%) rotate(-34deg) scale(0.94);
   }
 
   50% {
-    opacity: 0.92;
-    transform: translate(-50%, -50%) rotate(38deg) scale(1);
-  }
-}
-
-@keyframes minimalArrowHead {
-  0%,
-  100% {
-    opacity: 0.54;
-    transform: rotate(-38deg) translate3d(0, 0, 0);
-  }
-
-  50% {
-    opacity: 0.92;
-    transform: rotate(42deg) translate3d(1px, -1px, 0);
+    opacity: 0.86;
   }
 }
 
