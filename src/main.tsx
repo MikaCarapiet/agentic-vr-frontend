@@ -205,6 +205,7 @@ function App({ video: sceneVideo, onExit }: AppProps) {
   const responseTimerRef = useRef<number | null>(null);
   const voiceRestartTimerRef = useRef<number | null>(null);
   const hudTimerRef = useRef<number | null>(null);
+  const hudPinnedRef = useRef(false);
   const isScrubbingRef = useRef(false);
 
   const [mode, setMode] = useState<AppMode>("watching");
@@ -248,6 +249,12 @@ function App({ video: sceneVideo, onExit }: AppProps) {
     voiceState === "listening" || voiceState === "thinking"
       ? heardText || centerCaption || "Listening..."
       : centerCaption;
+  const hudPinned =
+    voiceEnabled &&
+    (veraSessionActive ||
+      voiceState === "listening" ||
+      voiceState === "thinking" ||
+      voiceState === "speaking");
   const scenePrompts = useMemo(() => {
     const characterAgents = agents.filter((agent) => agent.id !== "director");
     const primary = characterAgents[0]?.name ?? "the closest character";
@@ -300,7 +307,13 @@ function App({ video: sceneVideo, onExit }: AppProps) {
   function revealHud(duration = 7600) {
     setHudVisible(true);
     if (hudTimerRef.current) window.clearTimeout(hudTimerRef.current);
+    if (hudPinnedRef.current) {
+      hudTimerRef.current = null;
+      return;
+    }
+
     hudTimerRef.current = window.setTimeout(() => {
+      if (hudPinnedRef.current) return;
       setHudVisible(false);
       hudTimerRef.current = null;
     }, duration);
@@ -309,6 +322,20 @@ function App({ video: sceneVideo, onExit }: AppProps) {
   useEffect(() => {
     revealHud();
   }, []);
+
+  useEffect(() => {
+    hudPinnedRef.current = hudPinned;
+    if (!hudPinned) {
+      revealHud();
+      return;
+    }
+
+    setHudVisible(true);
+    if (hudTimerRef.current) {
+      window.clearTimeout(hudTimerRef.current);
+      hudTimerRef.current = null;
+    }
+  }, [hudPinned]);
 
   function updateHeardTranscript(text: string) {
     const heard = text.trim();
