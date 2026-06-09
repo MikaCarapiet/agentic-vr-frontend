@@ -159,6 +159,7 @@
   transition: opacity 600ms ease;
   user-select: none;
   pointer-events: none;
+  animation: lndHeroImageIn 760ms ease both;
 }
 
 .lnd-hero-img.ready {
@@ -206,6 +207,7 @@
   min-height: calc(100% - 56px);
   margin-left: 60px;
   padding-top: 56px;
+  animation: lndHeroCopyIn 540ms ease both;
 }
 
 .lnd-badge {
@@ -260,6 +262,55 @@
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 30px;
+}
+
+.lnd-carousel-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.lnd-carousel-controls > span {
+  color: #64748b;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.lnd-carousel-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lnd-carousel-dots button {
+  position: relative;
+  width: 28px;
+  height: 7px;
+  overflow: hidden;
+  border: 1px solid rgba(120, 216, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(120, 216, 255, 0.08);
+}
+
+.lnd-carousel-dots button::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: #78d8ff;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.lnd-carousel-dots button.active {
+  width: 42px;
+  border-color: rgba(120, 216, 255, 0.58);
+}
+
+.lnd-carousel-dots button.active::before {
+  animation: lndCarouselProgress 5.2s linear both;
 }
 
 .lnd-btn-primary,
@@ -388,9 +439,14 @@
 }
 
 .lnd-premiere-card:hover,
+.lnd-premiere-card.active,
 .lnd-path-item:hover {
   border-color: rgba(120, 216, 255, 0.32);
   background: rgba(7, 16, 30, 0.78);
+}
+
+.lnd-premiere-card.active {
+  box-shadow: 0 0 0 1px rgba(120, 216, 255, 0.08), 0 18px 42px rgba(0, 0, 0, 0.18);
 }
 
 .lnd-premiere-media {
@@ -512,6 +568,40 @@ button.lnd-universe-card:hover {
   text-align: right;
 }
 
+@keyframes lndHeroImageIn {
+  from {
+    opacity: 0;
+    transform: scale(1.035);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.01);
+  }
+}
+
+@keyframes lndHeroCopyIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lndCarouselProgress {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
 @media (max-width: 980px) {
   .lnd-hero {
     min-height: 620px;
@@ -581,6 +671,11 @@ button.lnd-universe-card:hover {
   .lnd-hero-tagline {
     max-width: 340px;
     font-size: 0.88rem;
+  }
+
+  .lnd-carousel-controls {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .lnd-section {
