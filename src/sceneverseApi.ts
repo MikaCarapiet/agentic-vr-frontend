@@ -133,21 +133,28 @@ export type CommerceCollectible = {
 };
 
 const apiBaseUrl = (import.meta.env.VITE_SCENEVERSE_API_BASE_URL ?? "/backend").replace(/\/$/, "");
+const apiTimeoutMs = 2400;
 
 async function postJson<TResponse>(path: string, payload: unknown): Promise<TResponse | null> {
   if (!apiBaseUrl) return null;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), apiTimeoutMs);
 
   try {
     const response = await fetch(`${apiBaseUrl}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
 
     if (!response.ok) return null;
     return (await response.json()) as TResponse;
   } catch {
     return null;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }
 

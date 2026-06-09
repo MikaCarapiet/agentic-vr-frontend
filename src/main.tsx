@@ -10,6 +10,7 @@ import {
   type CommerceCollectible,
   type Intent,
 } from "./sceneverseApi";
+import { routeUtterance } from "./sceneRouter";
 import "./styles.css";
 import Landing from "./Landing";
 
@@ -204,23 +205,6 @@ function formatWakeCaption(command: string) {
   return command ? `Hey Vera, ${command}` : "Hey Vera";
 }
 
-function getVideoControlAction(text: string): ChatResponse["action"] | null {
-  const normalized = text.toLowerCase();
-  if (/\b(pause|hold|stop the video|stop video)\b/.test(normalized)) return "pause";
-  if (/\b(play|continue|resume|start the video|start video)\b/.test(normalized)) return "play";
-  if (/\b(rewind|go back|back 10|back ten)\b/.test(normalized)) return "rewind";
-  if (/\b(fast forward|skip ahead|forward 20|forward twenty|next 20|next twenty)\b/.test(normalized)) {
-    return "forward";
-  }
-  return null;
-}
-
-function isSceneGenerationCommand(text: string) {
-  return /\b(step into|enter|generate|open|create).*\b(scene|ciniverse|moment)\b|\bstep into this scene\b/i.test(
-    text,
-  );
-}
-
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds)) return "0:00";
   const minutes = Math.floor(seconds / 60);
@@ -265,6 +249,7 @@ function App() {
   const [selectedLayer, setSelectedLayer] = useState("scene-video");
   const [commerceCollectible, setCommerceCollectible] = useState<CommerceCollectible | null>(null);
   const [sceneId, setSceneId] = useState<string | null>(null);
+  const [sceneObjects, setSceneObjects] = useState<string[]>([]);
   const [memorySummary, setMemorySummary] = useState(
     "Preview memory: Vader has challenged Yoda's restraint.",
   );
@@ -587,6 +572,7 @@ function App() {
     });
 
     setSceneId(analysis.sceneId);
+    setSceneObjects(analysis.objects);
     setAgents(withDirectorAgent(analysis.characters));
     setMemorySummary(analysis.memorySummary);
     setAgentTrace(analysis.agentTrace);
@@ -682,28 +668,37 @@ function App() {
   async function handleUtterancePayload(utterance: string) {
     setVoiceState("thinking");
 
-    const videoAction = getVideoControlAction(utterance);
-    if (videoAction && mode === "watching") {
-      const handled = await handleVideoControl(videoAction);
+    const route = routeUtterance({
+      utterance,
+      mode,
+      agents,
+      activeAgentId,
+      sceneObjects,
+    });
+    setLastIntent(route.intent);
+    setAgentTrace(route.agentTrace);
+    showTool(route.tool);
+
+    if (route.kind === "video_control") {
+      const handled = await handleVideoControl(route.action);
       setLastIntent("video_control");
       speakResponse(
-        !handled
-          ? "Playback needs a tap first."
-          : videoAction === "play"
-          ? "Playing."
-          : videoAction === "pause"
-            ? "Paused."
-            : videoAction === "rewind"
-              ? "Rewinding 10 seconds."
-              : "Skipping ahead 20 seconds.",
+        !handled ? "Playback needs a tap first." : route.response ?? "Done.",
         "CineVerse",
       );
       return;
     }
 
-    if (isSceneGenerationCommand(utterance) && mode === "watching") {
+    if (route.kind === "scene_generation") {
       setLastIntent("scene_generation");
       runGeneration();
+      return;
+    }
+
+    if (route.kind === "scene_exit") {
+      setMode("watching");
+      setActiveAgentId("director");
+      speakResponse(route.response ?? "Returning to cinematic controls.", "Director");
       return;
     }
 
@@ -723,10 +718,21 @@ function App() {
       }
     }
 
+    const collectiblePromise =
+      route.kind === "commerce_collect"
+        ? findCollectible(
+            sceneId,
+            `${utterance} collectible replica ${route.objectLabel ?? sceneObjects.join(" ")} scene item`,
+          )
+        : null;
+    if (collectiblePromise) {
+      showTool({ label: "Exa: finding collectible", detail: route.objectLabel ?? "scene item" });
+    }
+
     const routed = await sendChat({
       sceneId,
       message: utterance,
-      targetAgentId: activeAgentId,
+      targetAgentId: route.targetAgentId ?? activeAgentId,
       playback: {
         currentTime,
         isPlaying,
@@ -734,49 +740,53 @@ function App() {
       },
     });
 
-    setLastIntent(routed.intent);
+    const finalIntent = route.intent === "fallback_clarify" ? routed.intent : route.intent;
+    setLastIntent(finalIntent);
     setMemorySummary(routed.updatedMemorySummary);
-    setAgentTrace(routed.agentTrace);
+    setAgentTrace([...route.agentTrace, ...routed.agentTrace]);
     showTool({
       label:
-        routed.intent === "video_control"
+        finalIntent === "video_control"
           ? "Router: video command"
-          : routed.intent === "scene_generation"
+          : finalIntent === "scene_generation"
             ? "Router: scene command"
-            : routed.intent === "commerce_collect"
+            : finalIntent === "commerce_collect"
               ? "Router: collect intent"
-              : routed.intent === "director_question"
+              : finalIntent === "director_question"
                 ? "Router: director question"
-                : routed.intent === "character_chat"
+                : finalIntent === "character_chat"
                   ? "Router: character question"
                   : "Router: clarify",
+      detail: route.objectLabel,
     });
 
-    if (routed.targetAgentId) setActiveAgentId(routed.targetAgentId);
+    const targetAgentId = route.targetAgentId ?? routed.targetAgentId;
+    if (targetAgentId) setActiveAgentId(targetAgentId);
 
-    if (routed.intent === "video_control") {
+    if (finalIntent === "video_control") {
       await handleVideoControl(routed.action);
       speakResponse(routed.response ?? "Done.", "CineVerse");
       return;
     }
 
-    if (routed.intent === "scene_generation") {
+    if (finalIntent === "scene_generation") {
       runGeneration();
       return;
     }
 
-    if (routed.intent === "commerce_collect") {
-      showTool({ label: "Exa: finding collectible", detail: "lightsaber match" });
-      const collectible = await findCollectible(
-        sceneId,
-        `${utterance} collectible replica lightsaber scene item`,
-      );
+    if (finalIntent === "commerce_collect") {
+      const collectible =
+        (await collectiblePromise) ??
+        (await findCollectible(
+          sceneId,
+          `${utterance} collectible replica ${route.objectLabel ?? sceneObjects.join(" ")} scene item`,
+        ));
       setCommerceCollectible(collectible);
     }
 
     window.setTimeout(() => {
       const speaker = routed.respondingAgent;
-      showTool({ label: "Memory updated", detail: routed.intent.replace("_", " ") });
+      showTool({ label: "Memory updated", detail: finalIntent.replace("_", " ") });
       speakResponse(routed.response, speaker);
     }, 650);
   }
@@ -1290,6 +1300,11 @@ function App() {
 
 function Root() {
   const [inExperience, setInExperience] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = inExperience ? "hidden" : "auto";
+    return () => { document.body.style.overflow = ""; };
+  }, [inExperience]);
 
   if (!inExperience) {
     return <Landing onEnter={() => setInExperience(true)} />;

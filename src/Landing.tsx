@@ -17,23 +17,93 @@ const DEMO_VIDEO = {
 };
 
 const COMING_SOON = [
-  { id: "cs-1", title: "The Last Heist", genre: "Crime · Thriller", badge: "COMING SOON" },
-  { id: "cs-2", title: "Stellar Drift", genre: "Sci-Fi · Drama", badge: "COMING SOON" },
-  { id: "cs-3", title: "Midnight Protocol", genre: "Spy · Action", badge: "COMING SOON" },
-  { id: "cs-4", title: "The Garden Hour", genre: "Mystery · Slow Cinema", badge: "COMING SOON" },
+  {
+    id: "cs-1",
+    title: "The Last Heist",
+    genre: "Crime · Thriller",
+    gradient: "linear-gradient(135deg, #1a0a00 0%, #3d1800 40%, #1a0500 100%)",
+    accent: "#f59e0b",
+    icon: "◆",
+  },
+  {
+    id: "cs-2",
+    title: "Stellar Drift",
+    genre: "Sci-Fi · Drama",
+    gradient: "linear-gradient(135deg, #00071a 0%, #001840 40%, #060018 100%)",
+    accent: "#7fc6ff",
+    icon: "✦",
+  },
+  {
+    id: "cs-3",
+    title: "Midnight Protocol",
+    genre: "Spy · Action",
+    gradient: "linear-gradient(135deg, #001a0a 0%, #00331a 40%, #001008 100%)",
+    accent: "#9ee78e",
+    icon: "⬡",
+  },
+  {
+    id: "cs-4",
+    title: "The Garden Hour",
+    genre: "Mystery · Slow Cinema",
+    gradient: "linear-gradient(135deg, #0d0a00 0%, #2a2000 40%, #0a0800 100%)",
+    accent: "#d4b896",
+    icon: "❋",
+  },
 ];
 
-export default function Landing({ onEnter }: Props) {
-  const heroVideoRef = useRef<HTMLVideoElement>(null);
-  const [heroReady, setHeroReady] = useState(false);
-  const [heroMuted, setHeroMuted] = useState(true);
+function useVideoThumbnail(src: string, seekTime = 1.5) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    const v = heroVideoRef.current;
-    if (!v) return;
-    v.muted = true;
-    v.play().catch(() => {});
-  }, []);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    video.crossOrigin = "anonymous";
+
+    video.addEventListener("loadedmetadata", () => {
+      video.currentTime = Math.min(seekTime, video.duration * 0.1);
+    });
+
+    video.addEventListener("seeked", () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        setDataUrl(canvas.toDataURL("image/jpeg", 0.85));
+      }
+    });
+
+    video.src = src;
+  }, [src, seekTime]);
+
+  return dataUrl;
+}
+
+function PlaceholderThumb({
+  gradient,
+  accent,
+  icon,
+  title,
+}: {
+  gradient: string;
+  accent: string;
+  icon: string;
+  title: string;
+}) {
+  return (
+    <div className="lnd-placeholder-thumb" style={{ background: gradient }}>
+      <span className="lnd-placeholder-icon" style={{ color: accent }}>{icon}</span>
+      <span className="lnd-placeholder-title" style={{ color: accent }}>{title}</span>
+      <div className="lnd-placeholder-noise" aria-hidden="true" />
+    </div>
+  );
+}
+
+export default function Landing({ onEnter }: Props) {
+  const thumbnail = useVideoThumbnail("/demo-duel.mp4", 2);
 
   return (
     <div className="landing">
@@ -54,16 +124,16 @@ export default function Landing({ onEnter }: Props) {
       {/* HERO */}
       <section className="lnd-hero">
         <div className="lnd-hero-bg">
-          <video
-            ref={heroVideoRef}
-            className={`lnd-hero-video${heroReady ? " ready" : ""}`}
-            src="/demo-duel.mp4"
-            playsInline
-            muted
-            loop
-            preload="auto"
-            onCanPlay={() => setHeroReady(true)}
-          />
+          {thumbnail ? (
+            <img
+              src={thumbnail}
+              className="lnd-hero-img ready"
+              alt="Yoda vs Vader scene"
+              draggable={false}
+            />
+          ) : (
+            <div className="lnd-hero-fallback" />
+          )}
           <div className="lnd-hero-vignette" />
         </div>
 
@@ -88,32 +158,8 @@ export default function Landing({ onEnter }: Props) {
               </svg>
               Watch Now
             </button>
-            <button
-              className="lnd-btn-ghost"
-              onClick={() => {
-                const v = heroVideoRef.current;
-                if (!v) return;
-                setHeroMuted((m) => {
-                  v.muted = !m;
-                  return !m;
-                });
-              }}
-              aria-label={heroMuted ? "Unmute trailer" : "Mute trailer"}
-            >
-              {heroMuted ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <polygon points="11,5 6,9 2,9 2,15 6,15 11,19" />
-                  <line x1="23" y1="9" x2="17" y2="15" />
-                  <line x1="17" y1="9" x2="23" y2="15" />
-                </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <polygon points="11,5 6,9 2,9 2,15 6,15 11,19" />
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                </svg>
-              )}
-              {heroMuted ? "Unmute" : "Mute"}
+            <button className="lnd-btn-ghost" onClick={onEnter}>
+              More Info
             </button>
           </div>
         </div>
@@ -148,22 +194,15 @@ export default function Landing({ onEnter }: Props) {
         <section className="lnd-row">
           <h2 className="lnd-row-label">Featured Demos</h2>
           <div className="lnd-cards-track">
+
             {/* Real demo card */}
             <button className="lnd-card lnd-card-active" onClick={onEnter} aria-label={`Watch ${DEMO_VIDEO.title}`}>
               <div className="lnd-card-thumb">
-                <video
-                  src="/demo-duel.mp4"
-                  muted
-                  playsInline
-                  preload="metadata"
-                  className="lnd-card-video"
-                  onMouseEnter={(e) => (e.currentTarget as HTMLVideoElement).play().catch(() => {})}
-                  onMouseLeave={(e) => {
-                    const v = e.currentTarget as HTMLVideoElement;
-                    v.pause();
-                    v.currentTime = 0;
-                  }}
-                />
+                {thumbnail ? (
+                  <img src={thumbnail} alt={DEMO_VIDEO.title} className="lnd-card-thumb-img" draggable={false} />
+                ) : (
+                  <div className="lnd-card-thumb-loading" />
+                )}
                 <div className="lnd-card-overlay">
                   <span className="lnd-badge lnd-badge-live">LIVE</span>
                   <div className="lnd-card-play">
@@ -182,9 +221,15 @@ export default function Landing({ onEnter }: Props) {
             {/* Coming soon cards */}
             {COMING_SOON.map((c) => (
               <div key={c.id} className="lnd-card lnd-card-soon">
-                <div className="lnd-card-thumb lnd-card-thumb-empty">
-                  <div className="lnd-card-soon-inner">
-                    <span className="lnd-badge">{c.badge}</span>
+                <div className="lnd-card-thumb">
+                  <PlaceholderThumb
+                    gradient={c.gradient}
+                    accent={c.accent}
+                    icon={c.icon}
+                    title={c.title}
+                  />
+                  <div className="lnd-card-overlay-soon">
+                    <span className="lnd-badge">COMING SOON</span>
                   </div>
                 </div>
                 <div className="lnd-card-info">
