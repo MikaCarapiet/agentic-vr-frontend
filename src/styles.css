@@ -896,21 +896,27 @@ button {
 .commerce-card {
   position: absolute;
   z-index: 5;
-  top: 28px;
-  left: 22px;
+  right: 22px;
+  bottom: 86px;
   display: grid;
-  gap: 6px;
-  width: min(280px, 24vw);
-  border: 1px solid rgba(245, 197, 110, 0.24);
-  border-radius: 12px;
-  padding: 12px;
-  color: var(--text);
+  gap: 5px;
+  width: clamp(300px, 28vw, 380px);
+  max-height: 190px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 2px solid rgba(245, 197, 110, 0.72);
+  border-radius: 8px 3px 3px 8px;
+  padding: 10px 11px;
+  color: rgba(255, 251, 243, 0.8);
   background:
-    radial-gradient(circle at 18% 0%, rgba(245, 197, 110, 0.18), transparent 42%),
-    linear-gradient(135deg, rgba(245, 197, 110, 0.12), rgba(127, 198, 255, 0.06)),
-    rgba(8, 9, 12, 0.58);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.26);
-  backdrop-filter: blur(16px);
+    linear-gradient(90deg, rgba(20, 10, 4, 0.62), rgba(245, 197, 110, 0.12)),
+    rgba(5, 5, 7, 0.62);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(10px);
+}
+
+.commerce-card ~ .response-history {
+  max-height: calc(100vh - 330px);
 }
 
 .commerce-card span {
@@ -922,15 +928,25 @@ button {
 }
 
 .commerce-card strong {
-  font-size: 0.86rem;
-  line-height: 1.15;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  color: rgba(255, 251, 243, 0.88);
+  font-size: 0.74rem;
+  line-height: 1.22;
+  -webkit-line-clamp: 2;
 }
 
 .commerce-card p {
+  display: -webkit-box;
   margin: 0;
-  color: rgba(255, 251, 243, 0.62);
-  font-size: 0.72rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  color: rgba(255, 251, 243, 0.66);
+  font-size: 0.7rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 4;
 }
 
 .commerce-card a {
@@ -1389,8 +1405,9 @@ button {
   }
 
   .commerce-card {
-    left: 14px;
-    width: 210px;
+    right: 14px;
+    bottom: 76px;
+    width: clamp(240px, 34vw, 300px);
   }
 
   .caption-layer {
@@ -1443,15 +1460,23 @@ button {
   }
 
   .commerce-card {
-    padding: 8px;
+    bottom: 64px;
+    max-height: 146px;
+    padding: 7px 8px;
+  }
+
+  .commerce-card ~ .response-history {
+    max-height: calc(100vh - 258px);
   }
 
   .commerce-card strong {
-    font-size: 0.72rem;
+    font-size: 0.64rem;
   }
 
   .commerce-card p {
-    font-size: 0.62rem;
+    font-size: 0.58rem;
+    line-height: 1.28;
+    -webkit-line-clamp: 3;
   }
 
   .agent-chip {
@@ -1674,11 +1699,16 @@ button {
   }
 
   .commerce-card {
-    top: 10px;
-    left: 10px;
-    width: clamp(150px, 18vw, 172px);
-    border-radius: 9px;
-    padding: 7px 8px;
+    right: 10px;
+    bottom: 50px;
+    width: clamp(210px, 24vw, 260px);
+    max-height: 118px;
+    border-radius: 7px 3px 3px 7px;
+    padding: 6px 8px;
+  }
+
+  .commerce-card ~ .response-history {
+    max-height: calc(100vh - 196px);
   }
 
   .tool-card strong,

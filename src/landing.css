@@ -131,9 +131,9 @@
 .lnd-hero {
   position: relative;
   z-index: 1;
-  min-height: 536px;
-  height: 74vh;
-  max-height: 720px;
+  min-height: 660px;
+  height: 82vh;
+  max-height: 780px;
   padding-top: 56px;
   overflow: hidden;
 }
@@ -206,7 +206,7 @@
   width: min(48vw, 560px);
   min-height: calc(100% - 56px);
   margin-left: 60px;
-  padding-top: 56px;
+  padding: 56px 0 72px;
   animation: lndHeroCopyIn 540ms ease both;
 }
 
