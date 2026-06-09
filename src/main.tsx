@@ -5,6 +5,7 @@ import {
   createRealtimeTranscriptionToken,
   findCollectible,
   sendChat,
+  synthesizeSpeechAudio,
   type AgentTrace,
   type AppMode,
   type ChatResponse,
@@ -50,36 +51,6 @@ type InSceneCommand = {
   targetAgentId?: string;
   exitMode?: AppMode;
 };
-
-type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  abort?: () => void;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  onerror: ((event: { error?: string }) => void) | null;
-  onresult:
-    | ((event: {
-        resultIndex: number;
-        results: ArrayLike<{
-          isFinal: boolean;
-          0: { transcript: string };
-        }>;
-      }) => void)
-    | null;
-};
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
-
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  }
-}
 
 const defaultAgents: Agent[] = [
   { id: "mentor", name: "Yoda", role: "mentor" },
@@ -222,6 +193,7 @@ function App({ onExit }: AppProps) {
   const voiceRestartTimerRef = useRef<number | null>(null);
   const hudTimerRef = useRef<number | null>(null);
   const isScrubbingRef = useRef(false);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [mode, setMode] = useState<AppMode>("watching");
   const [hudVisible, setHudVisible] = useState(true);
@@ -252,8 +224,6 @@ function App({ onExit }: AppProps) {
     { agent: "Vercel Frontend", step: "video player mounted", status: "done" },
     { agent: "MVP Memory", step: "cached fallback loaded", status: "fallback" },
   ]);
-  const ttsEnabled = true;
-
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const activeAgent = useMemo(
     () => agents.find((agent) => agent.id === activeAgentId) ?? agents[0],
@@ -309,6 +279,9 @@ function App({ onExit }: AppProps) {
       if (hudTimerRef.current) window.clearTimeout(hudTimerRef.current);
       voiceInputRef.current?.abort?.();
       voiceInputRef.current?.stop();
+      const audioUrl = ttsAudioRef.current?.src;
+      ttsAudioRef.current?.pause();
+      if (audioUrl?.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
     };
   }, []);
 
@@ -355,66 +328,17 @@ function App({ onExit }: AppProps) {
   useEffect(() => {
     let cancelled = false;
 
-    function startBrowserSpeechFallback(reason?: string) {
-      const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-      if (!Recognition) {
-        setVoiceSupported(false);
-        setVoiceState("idle");
-        setCaption("Voice prototype unavailable. Use the guide prompts.");
-        return;
-      }
-
-      const recognition = new Recognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = "en-US";
-      recognition.onstart = () => {
-        if (voiceEnabledRef.current) setVoiceState("listening");
-      };
-      recognition.onerror = () => {
-        setVoiceState(voiceEnabledRef.current ? "error" : "idle");
-      };
-      recognition.onend = () => {
-        if (voiceInputRef.current && voiceEnabledRef.current) {
-          startVoiceInput(voiceInputRef.current);
-        } else {
-          setVoiceState("idle");
-        }
-      };
-      recognition.onresult = (event) => {
-        let interim = "";
-        let final = "";
-
-        for (let index = event.resultIndex; index < event.results.length; index += 1) {
-          const result = event.results[index];
-          if (result.isFinal) final += result[0].transcript;
-          else interim += result[0].transcript;
-        }
-
-        updateHeardTranscript(final || interim);
-        if (final.trim()) {
-          handleVoiceFinalRef.current(final.trim());
-        }
-      };
-
-      voiceInputRef.current = {
-        provider: "browser-speech",
-        start: () => recognition.start(),
-        stop: () => recognition.stop(),
-        abort: () => recognition.abort?.(),
-      };
-      logAppEvent({
-        category: "voice",
-        label: "Browser speech fallback",
-        detail: reason ?? "OpenAI Realtime unavailable",
-        status: "fallback",
-      });
-      startVoiceInput();
-    }
-
     async function startOpenAIRealtime() {
       if (!isOpenAIRealtimeTranscriptionSupported()) {
-        startBrowserSpeechFallback("WebRTC microphone capture unavailable");
+        setVoiceSupported(false);
+        setVoiceState("idle");
+        setCaption("OpenAI realtime voice unavailable in this browser.");
+        logAppEvent({
+          category: "voice",
+          label: "OpenAI Realtime STT unavailable",
+          detail: "WebRTC microphone capture unavailable",
+          status: "error",
+        });
         return;
       }
 
@@ -464,7 +388,15 @@ function App({ onExit }: AppProps) {
         if (voiceEnabledRef.current) await realtimeInput.start();
       } catch (error) {
         if (cancelled) return;
-        startBrowserSpeechFallback(error instanceof Error ? error.message : "OpenAI Realtime setup failed");
+        setVoiceSupported(true);
+        setVoiceState("error");
+        setCaption("OpenAI realtime voice could not start.");
+        logAppEvent({
+          category: "voice",
+          label: "OpenAI Realtime STT unavailable",
+          detail: error instanceof Error ? error.message : "OpenAI Realtime setup failed",
+          status: "error",
+        });
       }
     }
 
@@ -602,28 +534,46 @@ function App({ onExit }: AppProps) {
     showTool({ label: "Vera listening", detail: "Say “Hey Vera” to activate" });
   }
 
-  function speakWithTts(text: string, speaker: string) {
-    if (!ttsEnabled || !("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+  async function speakWithTts(text: string, speaker: string) {
+    ttsAudioRef.current?.pause();
+    const previousObjectUrl = ttsAudioRef.current?.src;
+    if (previousObjectUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(previousObjectUrl);
+    }
+
+    const audioUrl = await synthesizeSpeechAudio(text, speaker);
+    if (!audioUrl) {
+      logAppEvent({
+        category: "voice",
+        label: "OpenAI TTS unavailable",
+        detail: speaker,
+        status: "fallback",
+      });
       return;
     }
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.92;
-    utterance.volume = 0.95;
+    const audio = new Audio(audioUrl);
+    ttsAudioRef.current = audio;
+    audio.addEventListener("ended", () => {
+      if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
+      if (ttsAudioRef.current === audio) ttsAudioRef.current = null;
+      setVoiceState(voiceSupported ? "listening" : "idle");
+    });
+    audio.addEventListener("error", () => {
+      if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
+      if (ttsAudioRef.current === audio) ttsAudioRef.current = null;
+      setVoiceState(voiceSupported ? "listening" : "idle");
+      logAppEvent({ category: "voice", label: "OpenAI TTS playback failed", detail: speaker, status: "error" });
+    });
 
-    if (speaker === "Vader") {
-      utterance.pitch = 0.55;
-      utterance.rate = 0.82;
-    } else if (speaker === "Yoda") {
-      utterance.pitch = 1.18;
-      utterance.rate = 0.86;
-    } else if (speaker === "Director") {
-      utterance.pitch = 0.92;
-      utterance.rate = 0.9;
+    try {
+      await audio.play();
+      logAppEvent({ category: "voice", label: "OpenAI TTS playback", detail: speaker, status: "active" });
+    } catch {
+      if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
+      if (ttsAudioRef.current === audio) ttsAudioRef.current = null;
+      logAppEvent({ category: "voice", label: "OpenAI TTS playback blocked", detail: speaker, status: "error" });
     }
-
-    window.speechSynthesis.speak(utterance);
   }
 
   function speakResponse(response: string, speaker: string) {
@@ -633,7 +583,7 @@ function App({ onExit }: AppProps) {
     setCaption(response);
     pushHistory({ speaker, text: response });
     if (speaker !== "You" && speaker !== "CineVerse") {
-      speakWithTts(response, speaker);
+      void speakWithTts(response, speaker);
     }
     window.setTimeout(() => {
       setVoiceState(voiceSupported ? "listening" : "idle");

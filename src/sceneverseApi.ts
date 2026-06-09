@@ -149,6 +149,22 @@ export type CommerceCollectible = {
 
 const apiBaseUrl = (import.meta.env.VITE_SCENEVERSE_API_BASE_URL ?? "/backend").replace(/\/$/, "");
 const apiTimeoutMs = 2400;
+const speechEndpointPaths = [
+  import.meta.env.VITE_SCENEVERSE_TTS_PATH,
+  "/api/realtime/speech",
+  "/api/realtime/text-to-speech",
+  "/api/speech/text-to-speech",
+].filter((path): path is string => Boolean(path));
+
+function decodeBase64Audio(base64: string, contentType = "audio/mpeg") {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return URL.createObjectURL(new Blob([bytes], { type: contentType }));
+}
 
 async function postJson<TResponse>(
   path: string,
@@ -205,6 +221,107 @@ async function postJson<TResponse>(
 
 export async function createRealtimeTranscriptionToken(): Promise<RealtimeTranscriptionToken | null> {
   return postJson<RealtimeTranscriptionToken>("/api/realtime/transcription-token", {}, 10000);
+}
+
+type SpeechAudioJsonResponse = {
+  audioBase64?: string;
+  base64?: string;
+  audioUrl?: string;
+  url?: string;
+  playbackUrl?: string;
+  contentType?: string;
+  audio?: {
+    data?: string;
+    base64?: string;
+    contentType?: string;
+  };
+  data?: Array<{
+    b64_json?: string;
+  }>;
+};
+
+export async function synthesizeSpeechAudio(text: string, speaker: string): Promise<string | null> {
+  if (!apiBaseUrl || !text.trim()) return null;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+  try {
+    for (const path of speechEndpointPaths) {
+      logAppEvent({
+        category: "api",
+        label: `POST ${path}`,
+        detail: `TTS request for ${speaker}`,
+        status: "active",
+      });
+
+      const response = await fetch(`${apiBaseUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, speaker }),
+        signal: controller.signal,
+      });
+
+      if (response.status === 404 || response.status === 405) {
+        continue;
+      }
+
+      if (!response.ok) {
+        logAppEvent({
+          category: "api",
+          label: `POST ${path}`,
+          detail: `HTTP ${response.status}`,
+          status: "fallback",
+        });
+        return null;
+      }
+
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.startsWith("audio/")) {
+        const audioUrl = URL.createObjectURL(await response.blob());
+        logAppEvent({ category: "api", label: `POST ${path}`, detail: "audio response received", status: "done" });
+        return audioUrl;
+      }
+
+      const body = (await response.json()) as SpeechAudioJsonResponse;
+      const audioUrl = body.audioUrl ?? body.url ?? body.playbackUrl;
+      if (audioUrl) {
+        logAppEvent({ category: "api", label: `POST ${path}`, detail: "audio URL received", status: "done" });
+        return audioUrl;
+      }
+
+      const audioBase64 =
+        body.audioBase64 ??
+        body.base64 ??
+        body.audio?.data ??
+        body.audio?.base64 ??
+        body.data?.[0]?.b64_json;
+      if (audioBase64) {
+        logAppEvent({ category: "api", label: `POST ${path}`, detail: "base64 audio received", status: "done" });
+        return decodeBase64Audio(audioBase64, body.contentType ?? body.audio?.contentType);
+      }
+
+      logAppEvent({ category: "api", label: `POST ${path}`, detail: "audio payload missing", status: "fallback" });
+      return null;
+    }
+
+    logAppEvent({
+      category: "api",
+      label: "OpenAI TTS",
+      detail: "No backend speech endpoint matched",
+      status: "fallback",
+    });
+    return null;
+  } catch (error) {
+    logAppEvent({
+      category: "api",
+      label: "OpenAI TTS",
+      detail: error instanceof DOMException && error.name === "AbortError" ? "request timed out" : "request failed",
+      status: "fallback",
+    });
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 function normalizeTrace(trace: BackendAgentTrace[]): AgentTrace[] {

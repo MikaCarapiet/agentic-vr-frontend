@@ -23,7 +23,7 @@ export type RealtimeTranscriptionCallbacks = {
 };
 
 export type VoiceInputController = {
-  provider: "openai-realtime" | "browser-speech";
+  provider: "openai-realtime";
   start: () => void | Promise<void>;
   stop: () => void;
   abort?: () => void;
