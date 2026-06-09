@@ -739,10 +739,10 @@ button {
   position: absolute;
   z-index: 6;
   right: 22px;
-  bottom: 76px;
+  top: 86px;
   display: grid;
   gap: 2px;
-  max-width: 220px;
+  width: min(260px, 22vw);
   border: 1px solid rgba(245, 197, 110, 0.22);
   border-radius: 10px;
   padding: 9px 11px;
@@ -991,29 +991,8 @@ button {
     0 0 14px rgba(127, 198, 255, 0.14);
 }
 
-.phone-rotate-mark::after {
-  position: absolute;
-  right: 7px;
-  top: 11px;
-  width: 9px;
-  height: 9px;
-  border-right: 2px solid rgba(245, 197, 110, 0.82);
-  border-bottom: 2px solid rgba(245, 197, 110, 0.82);
-  content: "";
-  transform: rotate(-34deg);
-}
-
 .rotate-arrow {
-  position: absolute;
-  left: 50%;
-  top: 1px;
-  width: 62px;
-  height: 30px;
-  border: 2px solid transparent;
-  border-top-color: rgba(245, 197, 110, 0.66);
-  border-radius: 50%;
-  pointer-events: none;
-  transform: translateX(-50%);
+  display: none;
 }
 
 .trace-list {
@@ -1517,9 +1496,8 @@ button {
 
   .tool-card {
     right: 10px;
-    bottom: 50px;
-    max-width: 176px;
-    width: min(176px, 20vw);
+    top: 10px;
+    width: clamp(140px, 18vw, 168px);
     border-radius: 9px;
     padding: 7px 8px;
   }
