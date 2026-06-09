@@ -234,6 +234,7 @@ function App() {
   const veraSessionActiveRef = useRef(false);
   const generationTimerRef = useRef<number | null>(null);
   const responseTimerRef = useRef<number | null>(null);
+  const voiceRestartTimerRef = useRef<number | null>(null);
 
   const [mode, setMode] = useState<AppMode>("watching");
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -316,6 +317,7 @@ function App() {
       veraSessionActiveRef.current = false;
       if (generationTimerRef.current) window.clearInterval(generationTimerRef.current);
       if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
+      if (voiceRestartTimerRef.current) window.clearTimeout(voiceRestartTimerRef.current);
       recognitionRef.current?.abort?.();
       recognitionRef.current?.stop();
     };
@@ -394,11 +396,43 @@ function App() {
   }
 
   function activateVeraSession() {
+    if (voiceRestartTimerRef.current) {
+      window.clearTimeout(voiceRestartTimerRef.current);
+      voiceRestartTimerRef.current = null;
+    }
     veraSessionActiveRef.current = true;
     setVeraSessionActive(true);
     setVoiceState(voiceSupported ? "listening" : "idle");
     setCaption("I'm listening.");
     showTool({ label: "Vera active", detail: "Say “stop listening” to end" });
+  }
+
+  function restartStandbyRecognition() {
+    const recognition = recognitionRef.current;
+    if (!recognition || !voiceEnabledRef.current) return;
+
+    if (voiceRestartTimerRef.current) {
+      window.clearTimeout(voiceRestartTimerRef.current);
+      voiceRestartTimerRef.current = null;
+    }
+
+    try {
+      recognition.abort?.();
+      recognition.stop();
+    } catch {
+      // Recognition may already be ending; the delayed start below re-arms standby.
+    }
+
+    voiceRestartTimerRef.current = window.setTimeout(() => {
+      voiceRestartTimerRef.current = null;
+      if (!voiceEnabledRef.current || recognitionRef.current !== recognition) return;
+
+      try {
+        recognition.start();
+      } catch {
+        setVoiceState("listening");
+      }
+    }, 180);
   }
 
   function deactivateVeraSession() {
@@ -407,11 +441,16 @@ function App() {
     setVoiceState(voiceSupported && voiceEnabledRef.current ? "listening" : "idle");
     setCaption("");
     showTool({ label: "Vera standby", detail: "Say “Hey Vera” to activate" });
+    restartStandbyRecognition();
   }
 
   function stopVeraListening() {
     voiceEnabledRef.current = false;
     veraSessionActiveRef.current = false;
+    if (voiceRestartTimerRef.current) {
+      window.clearTimeout(voiceRestartTimerRef.current);
+      voiceRestartTimerRef.current = null;
+    }
     setVoiceEnabled(false);
     setVeraSessionActive(false);
     setVoiceState("idle");
@@ -429,6 +468,10 @@ function App() {
 
     voiceEnabledRef.current = true;
     veraSessionActiveRef.current = false;
+    if (voiceRestartTimerRef.current) {
+      window.clearTimeout(voiceRestartTimerRef.current);
+      voiceRestartTimerRef.current = null;
+    }
     setVoiceEnabled(true);
     setVeraSessionActive(false);
     setVoiceState("listening");
