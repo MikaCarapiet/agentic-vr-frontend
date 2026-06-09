@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "dev:cloud": "VITE_SCENEVERSE_BACKEND_PROXY_TARGET=http://18.207.53.115 vite --host 0.0.0.0",
-    "dev:local": "VITE_SCENEVERSE_BACKEND_PROXY_TARGET=http://localhost:8000 vite --host 0.0.0.0",
+    "dev:cloud": "SCENEVERSE_PROFILE=cloud vite --host 0.0.0.0",
+    "dev:local": "SCENEVERSE_PROFILE=local vite --host 0.0.0.0",
     "build": "tsc && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },

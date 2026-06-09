@@ -28,8 +28,8 @@ The frontend always calls `/backend` by default. The environment decides where `
 | Environment | `/backend` target |
 | --- | --- |
 | Vercel production | cloud backend through `vercel.json` rewrite |
-| Local dev cloud mode | cloud backend through Vite proxy |
 | Local dev local mode | local backend through Vite proxy |
+| Local dev cloud mode | cloud backend through Vite proxy |
 
 This keeps deployed frontend users on the cloud backend while still letting local development switch between cloud and local backend debugging.
 
@@ -40,25 +40,31 @@ npm install
 npm run dev
 ```
 
-Default local dev uses the cloud backend:
+Default local dev uses the local backend:
 
 ```bash
 npm run dev
 ```
 
-Explicit cloud backend mode:
+This keeps local SQLite paired with local media files. Explicit cloud backend mode:
 
 ```bash
 npm run dev:cloud
 ```
 
-Local backend debugging mode:
+Explicit local backend mode:
 
 ```bash
 npm run dev:local
 ```
 
-Restart the dev server when switching modes because Vite loads proxy config on startup.
+Restart the dev server when switching modes because Vite loads proxy config on startup. The profile controls the
+whole environment bundle:
+
+```text
+local -> localhost backend, local SQLite, local media files
+cloud -> ECS backend, ECS SQLite, S3 media
+```
 
 ## Backend contract
 

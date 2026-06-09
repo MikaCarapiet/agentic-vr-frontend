@@ -153,6 +153,7 @@ export type VideoAsset = {
   videoId: string;
   sourceType: "upload" | "youtube" | "external_url";
   title: string | null;
+  description: string | null;
   originalUrl: string | null;
   originalFilename: string | null;
   storageBackend: string | null;
@@ -172,17 +173,29 @@ export type VideoListResponse = {
   rowCount: number;
 };
 
+export type DatabaseHealthResponse = {
+  status: "ok" | "error";
+  database: string;
+  engine: string;
+  environment?: string | null;
+  databasePath?: string | null;
+  sqliteVersion?: string | null;
+  quickCheck?: string | null;
+  journalMode?: string | null;
+  schemaRevision?: string | null;
+  tableCount?: number | null;
+};
+
 export type CreateVideoLinkPayload = {
   url: string;
   title?: string;
+  description?: string;
   sourceType: "youtube" | "external_url";
 };
 
 export type UpdateVideoPayload = {
   title?: string | null;
-  sourceType?: VideoAsset["sourceType"];
-  originalUrl?: string | null;
-  playbackUrl?: string | null;
+  description?: string | null;
   status?: string;
 };
 
@@ -444,6 +457,10 @@ export async function listVideos(limit = 24, offset = 0): Promise<VideoListRespo
   return getJson<VideoListResponse>(`/api/videos?${params.toString()}`, 8000);
 }
 
+export async function getDatabaseHealth(): Promise<DatabaseHealthResponse | null> {
+  return getJson<DatabaseHealthResponse>("/health/db", 8000);
+}
+
 export async function getVideo(videoId: string): Promise<VideoAsset | null> {
   return getJson<VideoAsset>(`/api/videos/${encodeURIComponent(videoId)}`, 8000);
 }
@@ -460,7 +477,7 @@ export async function deleteVideo(videoId: string): Promise<DeleteVideoResponse 
   return deleteJson<DeleteVideoResponse>(`/api/admin/videos/${encodeURIComponent(videoId)}`, 10000);
 }
 
-export async function uploadVideo(file: File, title?: string): Promise<VideoAsset | null> {
+export async function uploadVideo(file: File, title?: string, description?: string): Promise<VideoAsset | null> {
   if (!apiBaseUrl) return null;
 
   const controller = new AbortController();
@@ -468,6 +485,7 @@ export async function uploadVideo(file: File, title?: string): Promise<VideoAsse
   const formData = new FormData();
   formData.append("file", file);
   if (title?.trim()) formData.append("title", title.trim());
+  if (description?.trim()) formData.append("description", description.trim());
   const path = "/api/videos/upload";
   const url = `${apiBaseUrl}${path}`;
 

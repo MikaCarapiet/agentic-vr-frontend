@@ -11,6 +11,9 @@ export type CatalogVideo = {
   agents: string[];
   playbackUrl: string;
   sourceLabel: string;
+  thumbnailUrl?: string;
+  externalUrl?: string;
+  playerPlayable: boolean;
 };
 
 export const FALLBACK_CATALOG_VIDEO: CatalogVideo = {
@@ -25,27 +28,71 @@ export const FALLBACK_CATALOG_VIDEO: CatalogVideo = {
   agents: ["Yoda", "Vader", "Director"],
   playbackUrl: "/demo-duel.mp4",
   sourceLabel: "Bundled demo",
+  playerPlayable: true,
 };
 
-function getPlayableCandidate(asset: VideoAsset) {
+const VIDEO_FILE_PATTERN = /\.(mp4|m4v|mov|webm|mkv)(?:[?#].*)?$/i;
+
+function getYouTubeVideoId(value: string | null | undefined) {
+  const text = value?.trim();
+  if (!text) return null;
+
+  try {
+    const url = new URL(text);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (hostname === "youtu.be") {
+      return url.pathname.split("/").filter(Boolean)[0] ?? null;
+    }
+
+    if (
+      hostname === "youtube.com" ||
+      hostname.endsWith(".youtube.com") ||
+      hostname === "youtube-nocookie.com" ||
+      hostname.endsWith(".youtube-nocookie.com")
+    ) {
+      if (url.pathname === "/watch") return url.searchParams.get("v");
+
+      const parts = url.pathname.split("/").filter(Boolean);
+      const marker = parts.findIndex((part) => ["embed", "shorts", "live"].includes(part));
+      if (marker >= 0) return parts[marker + 1] ?? null;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function getYouTubeThumbnailUrl(value: string | null | undefined) {
+  const videoId = getYouTubeVideoId(value);
+  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : undefined;
+}
+
+function getSourceCandidate(asset: VideoAsset) {
   if (asset.status !== "ready") return null;
 
   if (asset.playbackUrl) return asset.playbackUrl;
-  if (asset.sourceType === "external_url") return asset.originalUrl;
+  if (asset.sourceType === "external_url" || asset.sourceType === "youtube") return asset.originalUrl;
 
   return null;
 }
 
 export function catalogVideoFromAsset(asset: VideoAsset): CatalogVideo | null {
-  const playbackCandidate = getPlayableCandidate(asset);
-  if (!playbackCandidate) return null;
+  const sourceCandidate = getSourceCandidate(asset);
+  if (!sourceCandidate) return null;
 
   if (asset.sourceType === "upload" && asset.fileSizeBytes !== null && asset.fileSizeBytes < 1024) {
     return null;
   }
 
-  const playbackUrl = resolveBackendAssetUrl(playbackCandidate);
-  if (!playbackUrl) return null;
+  const resolvedSourceUrl = resolveBackendAssetUrl(sourceCandidate);
+  if (!resolvedSourceUrl) return null;
+
+  const playerPlayable =
+    asset.sourceType === "upload" ||
+    Boolean(asset.playbackUrl) ||
+    (asset.sourceType === "external_url" && VIDEO_FILE_PATTERN.test(sourceCandidate));
 
   const createdYear = asset.createdAt ? new Date(asset.createdAt).getFullYear() : new Date().getFullYear();
   const title = asset.title?.trim() || asset.originalFilename?.trim() || "Untitled Scene";
@@ -54,19 +101,28 @@ export function catalogVideoFromAsset(asset: VideoAsset): CatalogVideo | null {
       ? asset.storageBackend === "s3"
         ? "S3 upload"
         : "Uploaded video"
-      : "External video";
+      : asset.sourceType === "youtube"
+        ? "YouTube"
+        : "External video";
 
   return {
     id: asset.videoId,
     title,
-    tagline: "Open the scene, talk to Vera, and branch the story from the current frame.",
-    genre: asset.sourceType === "upload" ? "Uploaded · Interactive Scene" : "Linked · Interactive Scene",
+    tagline:
+      asset.description?.trim() ||
+      (playerPlayable
+        ? "Open the scene, talk to Vera, and branch the story from the current frame."
+        : "Open the source reference from the catalogue and keep it available for review."),
+    genre: asset.sourceType === "upload" ? "Uploaded · Interactive Scene" : "Linked · Reference Scene",
     badge: `${sourceLabel} · Ready`,
     duration: asset.fileSizeBytes ? `${Math.max(1, Math.round(asset.fileSizeBytes / 1024 / 1024))} MB` : "Ready",
     year: Number.isFinite(createdYear) ? String(createdYear) : "2026",
     agents: ["Vera", "Director", "Scene agent"],
-    playbackUrl,
+    playbackUrl: playerPlayable ? resolvedSourceUrl : FALLBACK_CATALOG_VIDEO.playbackUrl,
     sourceLabel,
+    thumbnailUrl: getYouTubeThumbnailUrl(asset.originalUrl) ?? getYouTubeThumbnailUrl(asset.playbackUrl),
+    externalUrl: playerPlayable ? undefined : resolvedSourceUrl,
+    playerPlayable,
   };
 }
 
@@ -82,4 +138,3 @@ export function buildCatalogVideos(assets: VideoAsset[]): CatalogVideo[] {
 
   return [FALLBACK_CATALOG_VIDEO, ...backendVideos].slice(0, 8);
 }
-

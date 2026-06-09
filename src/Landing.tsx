@@ -8,17 +8,15 @@ type Props = {
   onOpenVideo: (videoId: string) => void;
 };
 
-const CAROUSEL_INTERVAL_MS = 5200;
+const CAROUSEL_INTERVAL_MS = 4000;
 
-function randomVideoIndex(total: number) {
-  if (total <= 1) return 0;
-  return Math.floor(Math.random() * total);
+function randomVideoIndex(_total: number) {
+  return 0;
 }
 
-function randomNextVideoIndex(total: number, currentIndex: number) {
+function nextVideoIndex(total: number, currentIndex: number) {
   if (total <= 1) return 0;
-  const offset = 1 + Math.floor(Math.random() * (total - 1));
-  return (currentIndex + offset) % total;
+  return (currentIndex + 1) % total;
 }
 
 function rotateVideos(videos: CatalogVideo[], startIndex: number) {
@@ -32,6 +30,8 @@ function useVideoThumbnail(src: string, seekTime = 1.5) {
   useEffect(() => {
     let disposed = false;
     setDataUrl(null);
+    if (!src) return;
+
     const video = document.createElement("video");
     video.preload = "metadata";
     video.muted = true;
@@ -82,7 +82,8 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
     [carouselVideos, featuredIndex],
   );
   const secondaryVideos = visibleCarouselVideos.filter((video) => video.id !== featuredVideo.id).slice(0, 3);
-  const thumbnail = useVideoThumbnail(featuredVideo.playbackUrl, 2);
+  const videoThumbnail = useVideoThumbnail(featuredVideo.thumbnailUrl ? "" : featuredVideo.playbackUrl, 2);
+  const thumbnail = featuredVideo.thumbnailUrl ?? videoThumbnail;
 
   useEffect(() => {
     setFeaturedIndex(randomVideoIndex(carouselVideos.length));
@@ -91,15 +92,15 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
   useEffect(() => {
     if (carouselVideos.length <= 1) return;
 
-    const intervalId = window.setInterval(() => {
-      setFeaturedIndex((currentIndex) => randomNextVideoIndex(carouselVideos.length, currentIndex));
+    const timeoutId = window.setTimeout(() => {
+      setFeaturedIndex(nextVideoIndex(carouselVideos.length, featuredIndex));
     }, CAROUSEL_INTERVAL_MS);
 
-    return () => window.clearInterval(intervalId);
-  }, [carouselVideos.length]);
+    return () => window.clearTimeout(timeoutId);
+  }, [carouselVideos.length, featuredIndex]);
 
   function openFeaturedVideo() {
-    onOpenVideo(featuredVideo.id);
+    openCatalogVideo(featuredVideo);
   }
 
   function featureVideo(videoId: string) {
@@ -109,6 +110,33 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
 
   function scrollToCatalog() {
     document.getElementById("scene-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function previewCardFromKeyboard(event: React.KeyboardEvent<HTMLElement>, videoId: string) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    featureVideo(videoId);
+  }
+
+  function previewVideoFromCard(event: React.MouseEvent<HTMLButtonElement>, videoId: string) {
+    event.stopPropagation();
+    featureVideo(videoId);
+  }
+
+  function openCatalogVideo(video: CatalogVideo) {
+    if (video.playerPlayable) {
+      onOpenVideo(video.id);
+      return;
+    }
+
+    if (video.externalUrl) {
+      window.open(video.externalUrl, "_blank", "noopener,noreferrer");
+    }
+  }
+
+  function openCatalogVideoFromCard(event: React.MouseEvent<HTMLButtonElement>, video: CatalogVideo) {
+    event.stopPropagation();
+    openCatalogVideo(video);
   }
 
   return (
@@ -156,14 +184,18 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
 
             <div className="lnd-hero-cta">
               <button className="lnd-btn-primary" onClick={openFeaturedVideo}>
-                Watch now
+                {featuredVideo.playerPlayable ? "Watch now" : "Open source"}
               </button>
               <button className="lnd-btn-secondary" onClick={scrollToCatalog}>
                 View all scenes
               </button>
             </div>
 
-            <div className="lnd-carousel-controls" aria-label="Featured video carousel">
+            <div
+              className="lnd-carousel-controls"
+              aria-label="Featured video carousel"
+              style={{ "--lnd-carousel-interval": `${CAROUSEL_INTERVAL_MS}ms` } as React.CSSProperties}
+            >
               <span>Auto preview</span>
               <div className="lnd-carousel-dots">
                 {carouselVideos.map((video, index) => (
@@ -202,49 +234,58 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
                   <div className="lnd-premiere-loading" />
                 )}
               </div>
-              <div className="lnd-premiere-copy">
+              <div className="lnd-premiere-copy lnd-card-copy">
                 <span>{featuredVideo.year} · {featuredVideo.duration}</span>
                 <strong>{featuredVideo.title}</strong>
-                <em>{featuredVideo.genre}</em>
-                <button
-                  className="lnd-card-watch"
-                  onClick={openFeaturedVideo}
-                  aria-label={`Watch ${featuredVideo.title}`}
-                >
-                  Watch
-                </button>
+                <p>{featuredVideo.tagline}</p>
+                <div className="lnd-card-actions lnd-card-actions-left">
+                  <button
+                    className="lnd-card-watch"
+                    onClick={openFeaturedVideo}
+                    aria-label={`${featuredVideo.playerPlayable ? "Watch" : "Open"} ${featuredVideo.title}`}
+                  >
+                    {featuredVideo.playerPlayable ? "Watch" : "Open"}
+                  </button>
+                </div>
               </div>
             </article>
 
             {secondaryVideos.map((item) => (
               <article
-                className="lnd-universe-card"
+                className="lnd-universe-card is-clickable"
                 key={item.id}
                 data-video-id={item.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => featureVideo(item.id)}
+                onKeyDown={(event) => previewCardFromKeyboard(event, item.id)}
               >
-                <div>
+                <div className="lnd-card-copy">
                   <span>{item.genre}</span>
                   <strong>{item.title}</strong>
+                  <p>{item.tagline}</p>
                 </div>
-                <div className="lnd-universe-metric">
-                  <strong>{item.year}</strong>
-                  <span>{item.sourceLabel}</span>
-                </div>
-                <div className="lnd-card-actions">
-                  <button
-                    className="lnd-card-preview"
-                    onClick={() => featureVideo(item.id)}
-                    aria-label={`Preview ${item.title}`}
-                  >
-                    Preview
-                  </button>
-                  <button
-                    className="lnd-card-watch"
-                    onClick={() => onOpenVideo(item.id)}
-                    aria-label={`Watch ${item.title}`}
-                  >
-                    Watch
-                  </button>
+                <div className="lnd-card-footer">
+                  <div className="lnd-universe-metric">
+                    <strong>{item.year}</strong>
+                    <span>{item.sourceLabel}</span>
+                  </div>
+                  <div className="lnd-card-actions">
+                    <button
+                      className="lnd-card-preview"
+                      onClick={(event) => previewVideoFromCard(event, item.id)}
+                      aria-label={`Preview ${item.title}`}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      className="lnd-card-watch"
+                      onClick={(event) => openCatalogVideoFromCard(event, item)}
+                      aria-label={`${item.playerPlayable ? "Watch" : "Open"} ${item.title}`}
+                    >
+                      {item.playerPlayable ? "Watch" : "Open"}
+                    </button>
+                  </div>
                 </div>
               </article>
             ))}
