@@ -893,6 +893,92 @@ button {
   white-space: nowrap;
 }
 
+.orientation-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  place-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(127, 198, 255, 0.15), transparent 34%),
+    linear-gradient(180deg, rgba(5, 5, 7, 0.98), rgba(6, 8, 12, 0.98));
+  pointer-events: auto;
+}
+
+.orientation-lock-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 320px;
+  color: var(--text);
+  text-align: center;
+}
+
+.orientation-lock-card > span {
+  color: rgba(245, 197, 110, 0.72);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.orientation-lock-card strong {
+  font-size: clamp(1.45rem, 8vw, 2.05rem);
+  line-height: 1;
+}
+
+.orientation-lock-card p {
+  max-width: 260px;
+  margin: 0;
+  color: rgba(255, 251, 243, 0.62);
+  font-size: 0.92rem;
+  line-height: 1.42;
+}
+
+.phone-rotate-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 78px;
+  aspect-ratio: 1;
+  margin-bottom: 6px;
+  border: 1px solid rgba(127, 198, 255, 0.28);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: 0 0 32px rgba(127, 198, 255, 0.16);
+}
+
+.phone-rotate-mark::before {
+  width: 26px;
+  height: 42px;
+  border: 2px solid rgba(255, 251, 243, 0.78);
+  border-radius: 8px;
+  content: "";
+  transform: rotate(90deg);
+}
+
+.phone-rotate-mark::after {
+  position: absolute;
+  right: 15px;
+  bottom: 18px;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid var(--gold);
+  border-bottom: 2px solid var(--gold);
+  content: "";
+  transform: rotate(-45deg);
+}
+
+.phone-rotate-mark span {
+  position: absolute;
+  width: 45px;
+  height: 45px;
+  border: 2px solid rgba(245, 197, 110, 0.62);
+  border-left-color: transparent;
+  border-radius: 50%;
+}
+
 .trace-list {
   display: grid;
   gap: 6px;
@@ -1402,6 +1488,12 @@ button {
   .generation-panel span {
     padding: 5px 7px;
     font-size: 0.54rem;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 760px) {
+  .orientation-lock {
+    display: grid;
   }
 }
 
