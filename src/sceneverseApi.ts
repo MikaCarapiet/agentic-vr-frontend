@@ -11,7 +11,7 @@ export type Intent =
 export type AgentTrace = {
   agent: string;
   step: string;
-  status: "queued" | "active" | "done" | "fallback";
+  status: "queued" | "active" | "done" | "fallback" | "error";
 };
 
 export type CharacterAgent = {
@@ -19,6 +19,52 @@ export type CharacterAgent = {
   name: string;
   role: string;
   emotionalState: string;
+};
+
+type BackendTraceStatus = "pending" | "complete" | "fallback" | "error";
+
+type BackendAgentTrace = {
+  agent: string;
+  step: string;
+  status: BackendTraceStatus;
+  detail?: string | null;
+};
+
+type BackendCharacter = {
+  characterId: string;
+  sceneId: string;
+  name: string;
+  role: string;
+  personality: string;
+  emotionalState: string;
+  goals: string[];
+  knowledgeBoundaries: string[];
+  speakingStyle: string;
+};
+
+type BackendSceneAnalysisResponse = {
+  sceneId: string;
+  sceneSummary: string;
+  scene: {
+    objects: string[];
+    emotionalTone: string;
+    memorySummary: string;
+  };
+  characters: BackendCharacter[];
+  directorContext: string;
+  memorySummary: string;
+  agentTrace: BackendAgentTrace[];
+};
+
+type BackendChatResponse = {
+  respondingAgent: {
+    id: string;
+    name: string;
+    type: "character" | "director" | "research" | "fallback";
+  };
+  response: string;
+  updatedMemorySummary: string;
+  agentTrace: BackendAgentTrace[];
 };
 
 export type SceneAnalysisRequest = {
@@ -68,7 +114,7 @@ export type ChatResponse = {
   };
 };
 
-const apiBaseUrl = import.meta.env.VITE_SCENEVERSE_API_BASE_URL?.replace(/\/$/, "");
+const apiBaseUrl = (import.meta.env.VITE_SCENEVERSE_API_BASE_URL ?? "/backend").replace(/\/$/, "");
 
 async function postJson<TResponse>(path: string, payload: unknown): Promise<TResponse | null> {
   if (!apiBaseUrl) return null;
@@ -87,11 +133,71 @@ async function postJson<TResponse>(path: string, payload: unknown): Promise<TRes
   }
 }
 
+function normalizeTrace(trace: BackendAgentTrace[]): AgentTrace[] {
+  return trace.map((step) => ({
+    agent: step.agent,
+    step: step.step,
+    status:
+      step.status === "complete"
+        ? "done"
+        : step.status === "pending"
+          ? "queued"
+          : step.status,
+  }));
+}
+
+function normalizeCharacter(character: BackendCharacter): CharacterAgent {
+  return {
+    id: character.characterId,
+    name: character.name,
+    role: character.role,
+    emotionalState: character.emotionalState,
+  };
+}
+
+function inferIntentFromResponse(request: ChatRequest, response: BackendChatResponse): Intent {
+  const text = request.message.toLowerCase();
+  const agentType = response.respondingAgent.type;
+
+  if (/(where can i buy|where can i purchase|where can i find|shop|collect|save|replica|poster|scene card|buy.*item|buy.*lightsaber)/.test(text)) {
+    return "commerce_collect";
+  }
+
+  if (agentType === "director" || /(director|meaning|symbol|cinematic|story|theme|why)/.test(text)) {
+    return "director_question";
+  }
+
+  if (agentType === "character") {
+    return "character_chat";
+  }
+
+  return "fallback_clarify";
+}
+
 export async function analyzeScene(
   request: SceneAnalysisRequest,
 ): Promise<SceneAnalysisResponse> {
-  const backendResponse = await postJson<SceneAnalysisResponse>("/api/scenes/analyze", request);
-  if (backendResponse) return backendResponse;
+  const backendResponse = await postJson<BackendSceneAnalysisResponse>("/api/scenes/analyze", {
+    frame: request.frame,
+    timestamp: request.timestamp,
+    transcriptSegment: request.transcriptSegment,
+    videoMetadata: {
+      videoId: "demo-duel",
+      title: request.videoMetadata.title,
+      source: request.videoMetadata.source,
+    },
+  });
+  if (backendResponse) {
+    return {
+      sceneId: backendResponse.sceneId,
+      sceneSummary: backendResponse.sceneSummary,
+      emotionalTone: backendResponse.scene.emotionalTone,
+      objects: backendResponse.scene.objects,
+      characters: backendResponse.characters.map(normalizeCharacter),
+      memorySummary: backendResponse.memorySummary,
+      agentTrace: normalizeTrace(backendResponse.agentTrace),
+    };
+  }
 
   return {
     sceneId: `scene-${Math.round(request.timestamp * 1000)}`,
@@ -116,8 +222,23 @@ export async function analyzeScene(
 }
 
 export async function sendChat(request: ChatRequest): Promise<ChatResponse> {
-  const backendResponse = await postJson<ChatResponse>("/api/chat", request);
-  if (backendResponse) return backendResponse;
+  if (request.sceneId) {
+    const backendResponse = await postJson<BackendChatResponse>("/api/chat", {
+      sceneId: request.sceneId,
+      message: request.message,
+      targetAgentId: request.targetAgentId,
+    });
+    if (backendResponse) {
+      return {
+        intent: inferIntentFromResponse(request, backendResponse),
+        respondingAgent: backendResponse.respondingAgent.name,
+        response: backendResponse.response,
+        updatedMemorySummary: backendResponse.updatedMemorySummary,
+        agentTrace: normalizeTrace(backendResponse.agentTrace),
+        targetAgentId: backendResponse.respondingAgent.id,
+      };
+    }
+  }
 
   return mockChat(request);
 }

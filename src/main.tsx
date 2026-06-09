@@ -69,11 +69,18 @@ declare global {
   }
 }
 
-const agents: Agent[] = [
+const defaultAgents: Agent[] = [
   { id: "mentor", name: "Yoda", role: "mentor" },
   { id: "shadow", name: "Vader", role: "antagonist" },
   { id: "director", name: "Director", role: "story lens" },
 ];
+
+function withDirectorAgent(sceneAgents: Agent[]): Agent[] {
+  const directorExists = sceneAgents.some((agent) => agent.id === "director");
+  return directorExists
+    ? sceneAgents
+    : [...sceneAgents, { id: "director", name: "Director", role: "story lens" }];
+}
 
 const generationSteps: ToolEvent[] = [
   { label: "Frame captured", detail: "hero moment locked" },
@@ -125,7 +132,7 @@ const inSceneNavigationPrompts: InSceneCommand[] = [
   },
   {
     label: "Focus Yoda",
-    aliases: ["focus yoda", "yoda focus", "talk yoda", "ask yoda"],
+    aliases: ["focus yoda", "yoda focus", "talk yoda"],
     targetAgentId: "mentor",
     response: "Audio focus shifts to Yoda. Ask what he sees.",
     detail: "Navigation: focus Yoda",
@@ -151,15 +158,6 @@ const inSceneNavigationPrompts: InSceneCommand[] = [
     response: "Returning to cinematic controls.",
     detail: "Navigation: exited scene",
   },
-];
-
-const inSceneControlPrompts: Array<InSceneCommand | string> = [
-  "ask Yoda what he senses",
-  "ask Vader what he wants",
-  "ask Yoda why Yoda's lightsaber is green",
-  "where can I buy that lightsaber?",
-  "collect this moment",
-  inSceneNavigationPrompts[5],
 ];
 
 function matchInSceneNavigationCommand(text: string): InSceneCommand | null {
@@ -220,6 +218,7 @@ function App() {
   const [caption, setCaption] = useState("Say “step into this scene”");
   const [heardText, setHeardText] = useState("");
   const [latestTool, setLatestTool] = useState<ToolEvent | null>(null);
+  const [agents, setAgents] = useState<Agent[]>(defaultAgents);
   const [history, setHistory] = useState<HistoryItem[]>([
     { speaker: "You", text: "Vader, why are you here?" },
     { speaker: "Vader", text: "The duel is not a question. It is a warning." },
@@ -251,11 +250,25 @@ function App() {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const activeAgent = useMemo(
     () => agents.find((agent) => agent.id === activeAgentId) ?? agents[0],
-    [activeAgentId],
+    [activeAgentId, agents],
   );
   const visibleHistory = history.slice(-4);
   const centerCaption =
     caption && caption !== "Say “step into this scene”" ? caption : "";
+  const scenePrompts = useMemo(() => {
+    const characterAgents = agents.filter((agent) => agent.id !== "director");
+    const primary = characterAgents[0]?.name ?? "the closest character";
+    const secondary = characterAgents[1]?.name ?? "the other character";
+
+    return [
+      `ask ${primary} what they sense`,
+      `ask ${secondary} what they want`,
+      "ask about the most important object",
+      "where can I buy that item?",
+      "collect this moment",
+      inSceneNavigationPrompts[5],
+    ] satisfies Array<InSceneCommand | string>;
+  }, [agents]);
 
   function layerClass(baseClass: string, layerId: string) {
     return `${baseClass} layer-target ${selectedLayer === layerId ? "layer-selected" : ""}`;
@@ -263,6 +276,15 @@ function App() {
 
   function selectLayer(layerId: string) {
     setSelectedLayer(layerId);
+  }
+
+  function resolveCommandTargetAgent(command: InSceneCommand) {
+    if (command.targetAgentId && agents.some((agent) => agent.id === command.targetAgentId)) {
+      return command.targetAgentId;
+    }
+
+    const commandText = `${command.label} ${command.aliases.join(" ")}`.toLowerCase();
+    return agents.find((agent) => commandText.includes(agent.name.toLowerCase()))?.id;
   }
 
   useEffect(() => {
@@ -464,12 +486,16 @@ function App() {
     });
 
     setSceneId(analysis.sceneId);
+    setAgents(withDirectorAgent(analysis.characters));
     setMemorySummary(analysis.memorySummary);
     setAgentTrace(analysis.agentTrace);
     setMode("in-scene");
     setGenerationStep(-1);
-    setActiveAgentId("mentor");
-    showTool({ label: "CineVerse ready", detail: "voice routed to agents" });
+    setActiveAgentId(analysis.characters[0]?.id ?? "director");
+    showTool({
+      label: "Scene agents created",
+      detail: analysis.characters.map((agent) => agent.name).join(", ") || "Director",
+    });
     speakResponse("The duel has opened. Speak, and the scene will answer.", "Director");
   }
 
@@ -520,8 +546,9 @@ function App() {
     if (mode === "in-scene") {
       const inSceneNavigation = matchInSceneNavigationCommand(utterance);
       if (inSceneNavigation) {
-        if (inSceneNavigation.targetAgentId) {
-          setActiveAgentId(inSceneNavigation.targetAgentId);
+        const commandTargetAgentId = resolveCommandTargetAgent(inSceneNavigation);
+        if (commandTargetAgentId) {
+          setActiveAgentId(commandTargetAgentId);
         }
         if (inSceneNavigation.exitMode) {
           setMode(inSceneNavigation.exitMode);
@@ -797,7 +824,7 @@ function App() {
           <strong>Hey Vera</strong>
         </div>
         <ul>
-          {(mode === "in-scene" ? inSceneControlPrompts : controlPrompts).map((prompt) => {
+          {(mode === "in-scene" ? scenePrompts : controlPrompts).map((prompt) => {
             const label = typeof prompt === "string" ? prompt : prompt.label;
             const layerId = `control-prompt-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
             return (
