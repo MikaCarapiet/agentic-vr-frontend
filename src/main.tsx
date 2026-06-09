@@ -11,6 +11,7 @@ import {
   type Intent,
 } from "./sceneverseApi";
 import "./styles.css";
+import Landing from "./Landing";
 
 const videoSrc = "/demo-duel.mp4";
 
@@ -1287,9 +1288,19 @@ function App() {
   );
 }
 
+function Root() {
+  const [inExperience, setInExperience] = useState(false);
+
+  if (!inExperience) {
+    return <Landing onEnter={() => setInExperience(true)} />;
+  }
+
+  return <App />;
+}
+
 const rootElement = document.getElementById("root") as HTMLElement & {
   sceneVerseRoot?: Root;
 };
 
 rootElement.sceneVerseRoot ??= createRoot(rootElement);
-rootElement.sceneVerseRoot.render(<App />);
+rootElement.sceneVerseRoot.render(<Root />);

@@ -814,7 +814,7 @@ button {
   position: absolute;
   z-index: 5;
   left: 50%;
-  top: 76px;
+  top: 18px;
   display: flex;
   gap: 8px;
   transform: translateX(-50%);
@@ -973,10 +973,11 @@ button {
   position: relative;
   display: grid;
   place-items: center;
-  width: 92px;
-  height: 64px;
+  width: 84px;
+  height: 84px;
   margin-bottom: 4px;
   filter: drop-shadow(0 0 16px rgba(127, 198, 255, 0.12));
+  animation: deviceRotate 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 .phone-rotate-mark::before {
@@ -992,8 +993,8 @@ button {
 
 .phone-rotate-mark::after {
   position: absolute;
-  right: 14px;
-  top: 14px;
+  right: 7px;
+  top: 11px;
   width: 9px;
   height: 9px;
   border-right: 2px solid rgba(245, 197, 110, 0.82);
@@ -1013,7 +1014,6 @@ button {
   border-radius: 50%;
   pointer-events: none;
   transform: translateX(-50%);
-  animation: minimalArrowPulse 2.6s ease-in-out infinite;
 }
 
 .trace-list {
@@ -1156,14 +1156,23 @@ button {
   }
 }
 
-@keyframes minimalArrowPulse {
+@keyframes deviceRotate {
   0%,
-  100% {
-    opacity: 0.48;
+  8% {
+    transform: rotate(80deg);
+    opacity: 0.6;
   }
 
-  50% {
-    opacity: 0.86;
+  40%,
+  70% {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+
+  92%,
+  100% {
+    transform: rotate(80deg);
+    opacity: 0.6;
   }
 }
 
@@ -1536,7 +1545,7 @@ button {
   }
 
   .generation-panel {
-    top: 52px;
+    top: 8px;
     gap: 5px;
   }
 
