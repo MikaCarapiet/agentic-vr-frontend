@@ -231,6 +231,7 @@ function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const voiceEnabledRef = useRef(true);
+  const veraSessionActiveRef = useRef(false);
   const generationTimerRef = useRef<number | null>(null);
   const responseTimerRef = useRef<number | null>(null);
 
@@ -254,6 +255,7 @@ function App() {
   const [debugOpen, setDebugOpen] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [veraSessionActive, setVeraSessionActive] = useState(false);
   const [manualText, setManualText] = useState("");
   const [lastIntent, setLastIntent] = useState<Intent | "none">("none");
   const [selectedLayer, setSelectedLayer] = useState("scene-video");
@@ -311,6 +313,7 @@ function App() {
   useEffect(() => {
     return () => {
       voiceEnabledRef.current = false;
+      veraSessionActiveRef.current = false;
       if (generationTimerRef.current) window.clearInterval(generationTimerRef.current);
       if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
       recognitionRef.current?.abort?.();
@@ -360,15 +363,15 @@ function App() {
 
       const heard = (final || interim).trim();
       const heardWake = heard ? parseWakeCommand(heard) : null;
-      if (heardWake?.isWakeInvocation) {
+      if (veraSessionActiveRef.current && heard) {
+        setHeardText(heard);
+        setCaption(heard);
+      } else if (heardWake?.isWakeInvocation) {
         setHeardText(formatWakeCaption(heardWake.command));
         setCaption(heardWake.command ? heardWake.command : "Listening...");
       }
       if (final.trim()) {
-        const finalWake = parseWakeCommand(final.trim());
-        if (finalWake.isWakeInvocation) {
-          handleUtterance(formatWakeCaption(finalWake.command));
-        }
+        handleVoiceFinal(final.trim());
       }
     };
 
@@ -390,9 +393,27 @@ function App() {
     responseTimerRef.current = window.setTimeout(() => setLatestTool(null), clearAfter);
   }
 
+  function activateVeraSession() {
+    veraSessionActiveRef.current = true;
+    setVeraSessionActive(true);
+    setVoiceState(voiceSupported ? "listening" : "idle");
+    setCaption("I'm listening.");
+    showTool({ label: "Vera active", detail: "Say “stop listening” to end" });
+  }
+
+  function deactivateVeraSession() {
+    veraSessionActiveRef.current = false;
+    setVeraSessionActive(false);
+    setVoiceState(voiceSupported && voiceEnabledRef.current ? "listening" : "idle");
+    setCaption("");
+    showTool({ label: "Vera standby", detail: "Say “Hey Vera” to activate" });
+  }
+
   function stopVeraListening() {
     voiceEnabledRef.current = false;
+    veraSessionActiveRef.current = false;
     setVoiceEnabled(false);
+    setVeraSessionActive(false);
     setVoiceState("idle");
     setCaption("");
     recognitionRef.current?.abort?.();
@@ -407,9 +428,11 @@ function App() {
     }
 
     voiceEnabledRef.current = true;
+    veraSessionActiveRef.current = false;
     setVoiceEnabled(true);
+    setVeraSessionActive(false);
     setVoiceState("listening");
-    setCaption("Say “Hey Vera” followed by your request.");
+    setCaption("Say “Hey Vera” to activate.");
     try {
       recognitionRef.current?.start();
     } catch {
@@ -557,12 +580,7 @@ function App() {
       return;
     }
 
-    setVoiceState(voiceSupported ? "listening" : "idle");
-    setCaption("Say “Hey Vera” followed by your request.");
-    showTool({
-      label: "Wake phrase detected",
-      detail: "Try: “Hey Vera, pause the video”",
-    });
+    activateVeraSession();
   }
 
   async function handleUtterancePayload(utterance: string) {
@@ -672,7 +690,7 @@ function App() {
         return;
       }
       if (isStopListeningCommand(parsed.command)) {
-        stopVeraListening();
+        deactivateVeraSession();
         return;
       }
       handleUtterancePayload(parsed.command);
@@ -680,7 +698,7 @@ function App() {
     }
 
     if (isStopListeningCommand(utterance)) {
-      stopVeraListening();
+      deactivateVeraSession();
       return;
     }
 
@@ -702,6 +720,23 @@ function App() {
       return;
     }
     setManualText(`Hey Vera, ${prompt}`);
+  }
+
+  function handleVoiceFinal(utterance: string) {
+    if (!utterance.trim()) return;
+
+    if (veraSessionActiveRef.current) {
+      handleUtterance(utterance);
+      return;
+    }
+
+    const parsed = parseWakeCommand(utterance);
+    if (!parsed.isWakeInvocation) return;
+
+    activateVeraSession();
+    if (parsed.command) {
+      handleUtterance(formatWakeCaption(parsed.command));
+    }
   }
 
   function togglePlayback() {
@@ -1110,12 +1145,24 @@ function App() {
         )}
         <button
           className={`${layerClass("vera-orb", "vera-orb")} ${
-            voiceEnabled ? voiceState : "muted"
+            !voiceEnabled ? "muted" : veraSessionActive ? "session-active" : voiceState
           }`}
           data-layer-id="vera-orb"
           data-layer-label="Vera wake word"
-          title={voiceEnabled ? "Vera is listening. Click to mute." : "Vera is muted. Click to listen."}
-          aria-label={voiceEnabled ? "Mute Vera listening" : "Start Vera listening"}
+          title={
+            !voiceEnabled
+              ? "Vera is muted. Click to listen."
+              : veraSessionActive
+                ? "Vera is active. Say stop listening to return to standby."
+                : "Vera is in standby. Say Hey Vera to activate. Click to mute."
+          }
+          aria-label={
+            !voiceEnabled
+              ? "Start Vera listening"
+              : veraSessionActive
+                ? "Vera active"
+                : "Mute Vera listening"
+          }
           aria-pressed={voiceEnabled}
           onClick={(event) => {
             event.stopPropagation();

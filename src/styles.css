@@ -623,6 +623,18 @@ button {
   box-shadow: 0 0 18px rgba(158, 231, 142, 0.24);
 }
 
+.vera-orb.session-active {
+  border-color: rgba(127, 198, 255, 0.82);
+  box-shadow:
+    0 0 18px rgba(127, 198, 255, 0.35),
+    0 0 36px rgba(158, 231, 142, 0.18);
+}
+
+.vera-orb.session-active::after {
+  content: "Active";
+  color: rgba(213, 237, 255, 0.92);
+}
+
 .vera-orb.thinking {
   border-color: rgba(245, 197, 110, 0.72);
   box-shadow: 0 0 20px rgba(245, 197, 110, 0.28);
