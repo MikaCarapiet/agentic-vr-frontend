@@ -83,6 +83,8 @@ const generationSteps: ToolEvent[] = [
 ];
 
 const promptSamples = [
+  "Hey Vera, step into this scene",
+  "Hey Vera, pause the video",
   "step into this scene",
   "pause",
   "rewind 10 seconds",
@@ -96,13 +98,10 @@ const promptSamples = [
 ];
 
 const controlPrompts = [
+  "play the video",
   "pause the video",
   "rewind 10 seconds",
   "fast forward 20 seconds",
-  "step into this scene",
-  "ask Yoda why Yoda's lightsaber is green",
-  "where can I buy that lightsaber?",
-  "collect this moment",
 ];
 
 const inSceneNavigationPrompts: InSceneCommand[] = [
@@ -154,12 +153,49 @@ const inSceneNavigationPrompts: InSceneCommand[] = [
   },
 ];
 
+const inSceneControlPrompts: Array<InSceneCommand | string> = [
+  "ask Yoda what he senses",
+  "ask Vader what he wants",
+  "ask Yoda why Yoda's lightsaber is green",
+  "where can I buy that lightsaber?",
+  "collect this moment",
+  inSceneNavigationPrompts[5],
+];
+
 function matchInSceneNavigationCommand(text: string): InSceneCommand | null {
   const normalized = text.toLowerCase().trim();
   return (
     inSceneNavigationPrompts.find((command) =>
       command.aliases.some((alias) => normalized.includes(alias))
     ) ?? null
+  );
+}
+
+type WakeCommandParse = {
+  isWakeInvocation: boolean;
+  command: string;
+};
+
+function parseWakeCommand(text: string): WakeCommandParse {
+  const trimmed = text.trim();
+  const match = trimmed.match(
+    /^\s*hey\s+vera\b[\s,:;!\-?.]*\s*(.*)$/i,
+  );
+
+  if (!match) {
+    return { isWakeInvocation: false, command: text.trim() };
+  }
+
+  const rawCommand = (match[1] ?? "").trim();
+  return {
+    isWakeInvocation: true,
+    command: rawCommand,
+  };
+}
+
+function isStopListeningCommand(text: string) {
+  return /\b(stop listening|mute|turn off (the )?(mic|microphone)|disable (the )?(mic|microphone))\b/i.test(
+    text,
   );
 }
 
@@ -175,6 +211,7 @@ function formatTime(seconds: number) {
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const voiceEnabledRef = useRef(true);
   const generationTimerRef = useRef<number | null>(null);
   const responseTimerRef = useRef<number | null>(null);
 
@@ -196,6 +233,7 @@ function App() {
   const [generationStep, setGenerationStep] = useState(-1);
   const [debugOpen, setDebugOpen] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [manualText, setManualText] = useState("");
   const [lastIntent, setLastIntent] = useState<Intent | "none">("none");
   const [selectedLayer, setSelectedLayer] = useState("scene-video");
@@ -229,6 +267,7 @@ function App() {
 
   useEffect(() => {
     return () => {
+      voiceEnabledRef.current = false;
       if (generationTimerRef.current) window.clearInterval(generationTimerRef.current);
       if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
       recognitionRef.current?.abort?.();
@@ -249,15 +288,21 @@ function App() {
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
-    recognition.onstart = () => setVoiceState("listening");
-    recognition.onerror = () => setVoiceState("error");
+    recognition.onstart = () => {
+      if (voiceEnabledRef.current) setVoiceState("listening");
+    };
+    recognition.onerror = () => {
+      setVoiceState(voiceEnabledRef.current ? "error" : "idle");
+    };
     recognition.onend = () => {
-      if (recognitionRef.current) {
+      if (recognitionRef.current && voiceEnabledRef.current) {
         try {
           recognition.start();
         } catch {
           setVoiceState("idle");
         }
+      } else {
+        setVoiceState("idle");
       }
     };
     recognition.onresult = (event) => {
@@ -282,7 +327,7 @@ function App() {
 
     recognitionRef.current = recognition;
     try {
-      recognition.start();
+      if (voiceEnabledRef.current) recognition.start();
     } catch {
       setVoiceState("idle");
     }
@@ -296,6 +341,34 @@ function App() {
     setLatestTool(event);
     if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
     responseTimerRef.current = window.setTimeout(() => setLatestTool(null), clearAfter);
+  }
+
+  function stopVeraListening() {
+    voiceEnabledRef.current = false;
+    setVoiceEnabled(false);
+    setVoiceState("idle");
+    setCaption("");
+    recognitionRef.current?.abort?.();
+    recognitionRef.current?.stop();
+    showTool({ label: "Vera muted", detail: "Click Vera to listen again" });
+  }
+
+  function startVeraListening() {
+    if (!voiceSupported) {
+      showTool({ label: "Voice unavailable", detail: "Use demo text input" });
+      return;
+    }
+
+    voiceEnabledRef.current = true;
+    setVoiceEnabled(true);
+    setVoiceState("listening");
+    setCaption("Say “Hey Vera” followed by your request.");
+    try {
+      recognitionRef.current?.start();
+    } catch {
+      setVoiceState("listening");
+    }
+    showTool({ label: "Vera listening", detail: "Say “Hey Vera” to activate" });
   }
 
   function speakWithTts(text: string, speaker: string) {
@@ -427,10 +500,22 @@ function App() {
     }
   }
 
-  async function handleUtterance(utterance: string) {
+  function activateVeraWakePrompt() {
+    if (!voiceEnabled) {
+      startVeraListening();
+      return;
+    }
+
+    setVoiceState(voiceSupported ? "listening" : "idle");
+    setCaption("Say “Hey Vera” followed by your request.");
+    showTool({
+      label: "Wake phrase detected",
+      detail: "Try: “Hey Vera, pause the video”",
+    });
+  }
+
+  async function handleUtterancePayload(utterance: string) {
     setVoiceState("thinking");
-    setHeardText(utterance);
-    pushHistory({ speaker: "You", text: utterance });
 
     if (mode === "in-scene") {
       const inSceneNavigation = matchInSceneNavigationCommand(utterance);
@@ -500,6 +585,33 @@ function App() {
     }, 650);
   }
 
+  function handleUtterance(utterance: string) {
+    if (!utterance.trim()) return;
+    const parsed = parseWakeCommand(utterance);
+    setHeardText(utterance);
+    pushHistory({ speaker: "You", text: utterance });
+
+    if (parsed.isWakeInvocation) {
+      if (!parsed.command) {
+        activateVeraWakePrompt();
+        return;
+      }
+      if (isStopListeningCommand(parsed.command)) {
+        stopVeraListening();
+        return;
+      }
+      handleUtterancePayload(parsed.command);
+      return;
+    }
+
+    if (isStopListeningCommand(utterance)) {
+      stopVeraListening();
+      return;
+    }
+
+    handleUtterancePayload(utterance);
+  }
+
   function handleManualSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = manualText.trim();
@@ -511,10 +623,10 @@ function App() {
   function handleGuideClick(prompt: string) {
     const matched = matchInSceneNavigationCommand(prompt);
     if (mode === "in-scene" && matched) {
-      void handleUtterance(prompt);
+      void handleUtterance(`Hey Vera, ${prompt}`);
       return;
     }
-    setManualText(prompt);
+    setManualText(`Hey Vera, ${prompt}`);
   }
 
   function togglePlayback() {
@@ -613,7 +725,7 @@ function App() {
               ? "Generating CineVerse..."
               : mode === "in-scene"
                 ? `Speak to ${activeAgent.name} or say “Director...”`
-                : "Say “step into this scene”"}
+                : "Say “Hey Vera, step into this scene”"}
           </strong>
         </div>
         <button
@@ -680,9 +792,12 @@ function App() {
         onClick={() => selectLayer("control-guide")}
         onFocus={() => selectLayer("control-guide")}
       >
-        <strong>{mode === "in-scene" ? "Navigation" : "Controls"}</strong>
+        <div className="guide-wake">
+          <span>Wake phrase</span>
+          <strong>Hey Vera</strong>
+        </div>
         <ul>
-          {(mode === "in-scene" ? inSceneNavigationPrompts : controlPrompts).map((prompt) => {
+          {(mode === "in-scene" ? inSceneControlPrompts : controlPrompts).map((prompt) => {
             const label = typeof prompt === "string" ? prompt : prompt.label;
             const layerId = `control-prompt-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
             return (
@@ -699,7 +814,7 @@ function App() {
                 }}
                 onFocus={() => selectLayer(layerId)}
                 role={mode === "in-scene" ? "button" : undefined}
-                aria-label={`Use command: ${label}`}
+                aria-label={`Use command: Hey Vera, ${label}`}
               >
                 “{label}”
               </li>
@@ -854,7 +969,7 @@ function App() {
             }}
             onFocus={() => selectLayer("scene-hint")}
           >
-            In-scene navigation mode
+            In scene
           </span>
         ) : (
           <>
@@ -919,25 +1034,27 @@ function App() {
           </>
         )}
         <button
-          className={`${layerClass("voice-orb", "voice-orb")} ${voiceState}`}
-          data-layer-id="voice-orb"
-          data-layer-label="Voice orb"
-          title={`Voice status: ${voiceState}. Click to focus demo input.`}
-          aria-label={`Voice status: ${voiceState}`}
+          className={`${layerClass("vera-orb", "vera-orb")} ${
+            voiceEnabled ? voiceState : "muted"
+          }`}
+          data-layer-id="vera-orb"
+          data-layer-label="Vera wake word"
+          title={voiceEnabled ? "Vera is listening. Click to mute." : "Vera is muted. Click to listen."}
+          aria-label={voiceEnabled ? "Mute Vera listening" : "Start Vera listening"}
+          aria-pressed={voiceEnabled}
           onClick={(event) => {
             event.stopPropagation();
-            selectLayer("voice-orb");
-            const input = document.querySelector<HTMLInputElement>(".demo-input input");
-            const inputVisible =
-              input && window.getComputedStyle(input).display !== "none" && input.offsetParent;
-            if (inputVisible) {
-              input.focus();
+            selectLayer("vera-orb");
+            if (voiceEnabled) {
+              stopVeraListening();
             } else {
-              showTool({ label: "Voice control", detail: voiceState });
+              startVeraListening();
             }
           }}
-          onFocus={() => selectLayer("voice-orb")}
+          onFocus={() => selectLayer("vera-orb")}
         >
+          <span />
+          <span />
           <span />
         </button>
         <form

@@ -438,21 +438,36 @@ button {
 }
 
 .control-guide.navigation-mode {
-  border-color: rgba(127, 198, 255, 0.35);
-  background: linear-gradient(180deg, rgba(9, 23, 34, 0.44), rgba(0, 0, 0, 0.4));
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.28);
 }
 
-.control-guide strong {
-  display: block;
-  margin-bottom: 7px;
-  color: rgba(255, 251, 243, 0.86);
-  font-size: 0.68rem;
+.guide-wake {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 7px;
+}
+
+.guide-wake span {
+  color: rgba(255, 251, 243, 0.42);
+  font-size: 0.58rem;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.control-guide.navigation-mode strong {
-  color: rgba(127, 198, 255, 0.9);
+.guide-wake strong {
+  color: rgba(255, 251, 243, 0.86);
+  font-size: 0.76rem;
+  letter-spacing: 0;
+}
+
+.control-guide.navigation-mode .guide-wake strong {
+  color: rgba(255, 251, 243, 0.86);
 }
 
 .control-guide ul {
@@ -479,14 +494,13 @@ button {
 }
 
 .navigation-mode .control-prompt {
-  border: 1px solid rgba(127, 198, 255, 0.1);
-  background: rgba(10, 16, 24, 0.46);
+  border: 0;
+  background: transparent;
 }
 
 .navigation-mode .control-prompt:hover,
 .navigation-mode .control-prompt:focus-visible {
-  border-color: rgba(127, 198, 255, 0.28);
-  background: rgba(127, 198, 255, 0.08);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .caption-layer {
@@ -522,96 +536,130 @@ button {
   color: rgba(255, 251, 243, 0.7);
 }
 
-.voice-orb {
+.vera-orb {
   position: relative;
   display: grid;
   place-items: center;
-  width: 45px;
+  width: 34px;
   aspect-ratio: 1;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(127, 198, 255, 0.42);
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.34);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.33), transparent 56%),
+    linear-gradient(155deg, rgba(14, 54, 88, 0.92), rgba(4, 10, 18, 0.88));
   backdrop-filter: blur(12px);
-  color: var(--text);
   cursor: pointer;
-  pointer-events: auto;
+  overflow: hidden;
   transition:
     border-color 180ms ease,
     transform 180ms ease,
+    box-shadow 180ms ease,
     background 180ms ease;
 }
 
-.bottom-bar .voice-orb {
-  width: 34px;
-}
-
-.bottom-bar .voice-orb::after {
-  top: auto;
-  bottom: calc(100% + 7px);
-}
-
-.voice-orb::after {
+.vera-orb::after {
+  content: "Hey Vera";
   position: absolute;
   top: calc(100% + 7px);
   left: 50%;
-  content: "Voice";
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(127, 198, 255, 0.22);
   border-radius: 999px;
   padding: 3px 7px;
-  color: rgba(255, 251, 243, 0.72);
+  color: rgba(127, 198, 255, 0.86);
   background: rgba(8, 9, 12, 0.62);
   backdrop-filter: blur(10px);
   font-size: 0.62rem;
+  white-space: nowrap;
   opacity: 0;
   pointer-events: none;
   transform: translateX(-50%) translateY(-2px);
   transition:
     opacity 160ms ease,
     transform 160ms ease;
-  white-space: nowrap;
 }
 
-.voice-orb:hover::after,
-.voice-orb:focus-visible::after {
+.vera-orb.muted::after {
+  content: "Muted";
+  color: rgba(255, 251, 243, 0.64);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.vera-orb:hover::after,
+.vera-orb:focus-visible::after {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
 
-.voice-orb:hover {
-  border-color: rgba(245, 197, 110, 0.48);
-  background: rgba(0, 0, 0, 0.48);
+.vera-orb span {
+  position: absolute;
+  width: 10px;
+  top: 50%;
+  left: 50%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  transform-origin: center center;
+  transform: translate(-50%, -50%) scale(0.45);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+}
+
+.vera-orb span:nth-child(1) {
+  width: 14px;
+  animation: veraPulse 2.7s ease-in-out infinite;
+}
+
+.vera-orb span:nth-child(2) {
+  width: 10px;
+  animation: veraPulse 2.7s 800ms ease-in-out infinite;
+}
+
+.vera-orb span:nth-child(3) {
+  width: 6px;
+  animation: veraPulse 2.7s 1600ms ease-in-out infinite;
+}
+
+.vera-orb.listening {
+  border-color: rgba(158, 231, 142, 0.62);
+  box-shadow: 0 0 18px rgba(158, 231, 142, 0.24);
+}
+
+.vera-orb.thinking {
+  border-color: rgba(245, 197, 110, 0.72);
+  box-shadow: 0 0 20px rgba(245, 197, 110, 0.28);
+}
+
+.vera-orb.speaking {
+  border-color: rgba(127, 198, 255, 0.72);
+  box-shadow: 0 0 20px rgba(127, 198, 255, 0.28);
+}
+
+.vera-orb.error {
+  border-color: rgba(127, 198, 255, 0.42);
+  box-shadow: none;
+}
+
+.vera-orb.muted {
+  border-color: rgba(255, 255, 255, 0.18);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.16), transparent 58%),
+    linear-gradient(155deg, rgba(26, 28, 32, 0.86), rgba(4, 5, 7, 0.88));
+  opacity: 0.72;
+}
+
+.vera-orb.muted span {
+  animation-play-state: paused;
+  opacity: 0.32;
+}
+
+.vera-orb:hover {
+  border-color: rgba(127, 198, 255, 0.76);
+  box-shadow: 0 0 18px rgba(127, 198, 255, 0.42);
   transform: translateY(-1px);
 }
 
-.voice-orb:focus-visible {
-  outline: 2px solid rgba(245, 197, 110, 0.72);
+.vera-orb:focus-visible {
+  outline: 2px solid rgba(127, 198, 255, 0.72);
   outline-offset: 3px;
-}
-
-.voice-orb span {
-  width: 12px;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.voice-orb.listening span {
-  background: var(--green);
-  animation: orbPulse 1.4s ease-in-out infinite;
-}
-
-.voice-orb.thinking span {
-  background: var(--gold);
-  animation: orbPulse 900ms ease-in-out infinite;
-}
-
-.voice-orb.speaking span {
-  background: var(--blue);
-  animation: orbPulse 700ms ease-in-out infinite;
-}
-
-.voice-orb.error span {
-  background: var(--red);
 }
 
 .response-history {
@@ -960,6 +1008,19 @@ button {
   }
 }
 
+@keyframes veraPulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translate(-50%, -50%) scale(0.42);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.32);
+  }
+}
+
 @keyframes drift {
   from {
     opacity: 0;
@@ -979,19 +1040,6 @@ button {
 @keyframes speakingRing {
   to {
     box-shadow: 0 0 0 11px rgba(245, 197, 110, 0);
-  }
-}
-
-@keyframes orbPulse {
-  0%,
-  100% {
-    opacity: 0.62;
-    transform: scale(0.82);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.18);
   }
 }
 
@@ -1019,7 +1067,7 @@ button {
   }
 
   .bottom-bar.in-scene {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto;
   }
 
   .demo-input {
@@ -1062,7 +1110,7 @@ button {
     padding-block: 6px;
   }
 
-  .bottom-bar .voice-orb {
+  .bottom-bar .vera-orb {
     width: 30px;
   }
 
@@ -1081,8 +1129,13 @@ button {
     padding: 8px;
   }
 
-  .control-guide strong {
+  .guide-wake {
     margin-bottom: 5px;
+    padding-bottom: 5px;
+  }
+
+  .guide-wake span,
+  .guide-wake strong {
     font-size: 0.58rem;
   }
 
@@ -1134,7 +1187,7 @@ button {
     font-size: 0.86rem;
   }
 
-  .voice-orb {
+  .vera-orb {
     width: 36px;
   }
 }

@@ -2,3 +2,5 @@ node_modules
 dist
 tmp
 .vercel
+.env
+.env.local
