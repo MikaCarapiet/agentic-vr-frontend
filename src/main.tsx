@@ -142,9 +142,12 @@ type WakeCommandParse = {
 };
 
 function parseWakeCommand(text: string): WakeCommandParse {
-  const trimmed = text.trim();
+  const trimmed = text
+    .trim()
+    .replace(/[“”]/g, "\"")
+    .replace(/[’]/g, "'");
   const match = trimmed.match(
-    /\bhey\s+vera\b[\s,:;!\-?.]*\s*(.*)$/i,
+    /^\s*(?:(?:hey|hi|hello|ok(?:ay)?)\s*[,;:!?.-]?\s*)?vera\b[\s,:;!\-?.]*\s*(.*)$/i,
   );
 
   if (!match) {
