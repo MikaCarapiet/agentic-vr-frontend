@@ -677,13 +677,13 @@ button {
 .response-history {
   position: absolute;
   z-index: 4;
-  top: 92px;
+  top: 28px;
   right: 22px;
   display: grid;
   align-content: end;
   gap: 8px;
-  min-height: 244px;
-  width: min(280px, 24vw);
+  min-height: 280px;
+  width: min(320px, 26vw);
   pointer-events: auto;
 }
 
@@ -695,10 +695,33 @@ button {
   backdrop-filter: blur(10px);
 }
 
+.response-history article.speaker-highlight {
+  border-right-color: rgba(245, 197, 110, 0.82);
+  background:
+    linear-gradient(90deg, transparent, rgba(245, 197, 110, 0.14)),
+    rgba(0, 0, 0, 0.1);
+}
+
+.response-history article.live-transcript {
+  border-right-color: rgba(127, 198, 255, 0.46);
+  background:
+    linear-gradient(90deg, transparent, rgba(127, 198, 255, 0.1)),
+    rgba(0, 0, 0, 0.12);
+}
+
 .response-history strong {
   display: block;
   color: rgba(255, 251, 243, 0.72);
   font-size: 0.66rem;
+}
+
+.response-history article.speaker-highlight strong,
+.response-history article.speaker-highlight p {
+  color: rgba(245, 197, 110, 0.92);
+}
+
+.response-history article.live-transcript strong {
+  color: rgba(127, 198, 255, 0.84);
 }
 
 .response-history p {
@@ -738,26 +761,27 @@ button {
   font-size: 0.66rem;
 }
 
-.saved-moment-card {
+.commerce-card {
   position: absolute;
   z-index: 5;
-  right: 22px;
-  bottom: 76px;
+  top: 28px;
+  left: 22px;
   display: grid;
-  gap: 4px;
-  width: min(250px, 24vw);
+  gap: 6px;
+  width: min(280px, 24vw);
   border: 1px solid rgba(245, 197, 110, 0.24);
   border-radius: 12px;
-  padding: 11px 12px;
+  padding: 12px;
   color: var(--text);
   background:
-    linear-gradient(135deg, rgba(245, 197, 110, 0.11), rgba(255, 49, 86, 0.07)),
-    rgba(8, 9, 12, 0.62);
+    radial-gradient(circle at 18% 0%, rgba(245, 197, 110, 0.18), transparent 42%),
+    linear-gradient(135deg, rgba(245, 197, 110, 0.12), rgba(127, 198, 255, 0.06)),
+    rgba(8, 9, 12, 0.58);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.26);
   backdrop-filter: blur(16px);
 }
 
-.saved-moment-card span {
+.commerce-card span {
   color: rgba(245, 197, 110, 0.76);
   font-size: 0.62rem;
   font-weight: 800;
@@ -765,16 +789,25 @@ button {
   text-transform: uppercase;
 }
 
-.saved-moment-card strong {
+.commerce-card strong {
   font-size: 0.86rem;
   line-height: 1.15;
 }
 
-.saved-moment-card p {
+.commerce-card p {
   margin: 0;
   color: rgba(255, 251, 243, 0.62);
   font-size: 0.72rem;
   line-height: 1.35;
+}
+
+.commerce-card a {
+  overflow: hidden;
+  color: rgba(127, 198, 255, 0.84);
+  font-size: 0.66rem;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .generation-panel {
@@ -1304,8 +1337,8 @@ button {
     width: 210px;
   }
 
-  .saved-moment-card {
-    right: 14px;
+  .commerce-card {
+    left: 14px;
     width: 210px;
   }
 
@@ -1362,16 +1395,15 @@ button {
     font-size: 0.58rem;
   }
 
-  .saved-moment-card {
-    bottom: 54px;
+  .commerce-card {
     padding: 8px;
   }
 
-  .saved-moment-card strong {
+  .commerce-card strong {
     font-size: 0.72rem;
   }
 
-  .saved-moment-card p {
+  .commerce-card p {
     font-size: 0.62rem;
   }
 
@@ -1576,8 +1608,7 @@ button {
     width: 5px;
   }
 
-  .tool-card,
-  .saved-moment-card {
+  .tool-card {
     right: 10px;
     bottom: 50px;
     max-width: 176px;
@@ -1586,14 +1617,23 @@ button {
     padding: 7px 8px;
   }
 
+  .commerce-card {
+    top: 10px;
+    left: 10px;
+    width: clamp(150px, 18vw, 172px);
+    border-radius: 9px;
+    padding: 7px 8px;
+  }
+
   .tool-card strong,
-  .saved-moment-card strong {
+  .commerce-card strong {
     font-size: 0.62rem;
   }
 
   .tool-card span,
-  .saved-moment-card span,
-  .saved-moment-card p {
+  .commerce-card span,
+  .commerce-card p,
+  .commerce-card a {
     font-size: 0.54rem;
   }
 

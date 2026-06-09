@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
   analyzeScene,
+  findCollectible,
   sendChat,
   type AgentTrace,
   type AppMode,
   type ChatResponse,
+  type CommerceCollectible,
   type Intent,
 } from "./sceneverseApi";
 import "./styles.css";
@@ -260,7 +262,7 @@ function App() {
   const [manualText, setManualText] = useState("");
   const [lastIntent, setLastIntent] = useState<Intent | "none">("none");
   const [selectedLayer, setSelectedLayer] = useState("scene-video");
-  const [savedMoment, setSavedMoment] = useState(false);
+  const [commerceCollectible, setCommerceCollectible] = useState<CommerceCollectible | null>(null);
   const [sceneId, setSceneId] = useState<string | null>(null);
   const [memorySummary, setMemorySummary] = useState(
     "Preview memory: Vader has challenged Yoda's restraint.",
@@ -279,6 +281,7 @@ function App() {
   const visibleHistory = history.slice(-4);
   const centerCaption =
     caption && caption !== "Say “step into this scene”" ? caption : "";
+  const liveTranscript = voiceState === "listening" ? centerCaption : "";
   const scenePrompts = useMemo(() => {
     const characterAgents = agents.filter((agent) => agent.id !== "director");
     const primary = characterAgents[0]?.name ?? "the closest character";
@@ -309,6 +312,10 @@ function App() {
 
     const commandText = `${command.label} ${command.aliases.join(" ")}`.toLowerCase();
     return agents.find((agent) => commandText.includes(agent.name.toLowerCase()))?.id;
+  }
+
+  function resolveAgentIdBySpeaker(speaker: string) {
+    return agents.find((agent) => agent.name.toLowerCase() === speaker.toLowerCase())?.id;
   }
 
   useEffect(() => {
@@ -509,6 +516,8 @@ function App() {
   }
 
   function speakResponse(response: string, speaker: string) {
+    const speakerAgentId = resolveAgentIdBySpeaker(speaker);
+    if (speakerAgentId) setActiveAgentId(speakerAgentId);
     setVoiceState("speaking");
     setCaption(response);
     pushHistory({ speaker, text: response });
@@ -756,7 +765,12 @@ function App() {
     }
 
     if (routed.intent === "commerce_collect") {
-      setSavedMoment(true);
+      showTool({ label: "Exa: finding collectible", detail: "lightsaber match" });
+      const collectible = await findCollectible(
+        sceneId,
+        `${utterance} collectible replica lightsaber scene item`,
+      );
+      setCommerceCollectible(collectible);
     }
 
     window.setTimeout(() => {
@@ -837,6 +851,10 @@ function App() {
     }
   }
 
+  const latestSpeakerHistoryIndex = visibleHistory.reduce((latestIndex, item, index) => {
+    return resolveAgentIdBySpeaker(item.speaker) ? index : latestIndex;
+  }, -1);
+
   return (
     <main
       className={`experience mode-${mode}`}
@@ -879,100 +897,30 @@ function App() {
         <span />
       </div>
 
-      <header
-        className={layerClass("top-bar", "top-bar")}
-        data-layer-id="top-bar"
-        data-layer-label="Top status bar"
-        title="Top status bar"
-        tabIndex={0}
-        onClick={() => selectLayer("top-bar")}
-        onFocus={() => selectLayer("top-bar")}
-      >
-        <div
-          className={layerClass("brand-lockup", "brand-lockup")}
-          data-layer-id="brand-lockup"
-          data-layer-label="Product state"
-          title="Product state"
+      {commerceCollectible ? (
+        <aside
+          className={layerClass("commerce-card", "commerce-card")}
+          data-layer-id="commerce-card"
+          data-layer-label="Agentic commerce collectible"
+          aria-label="Agentic commerce collectible"
+          title="Agentic commerce collectible"
           tabIndex={0}
-          onClick={(event) => {
-            event.stopPropagation();
-            selectLayer("brand-lockup");
-          }}
-          onFocus={() => selectLayer("brand-lockup")}
+          onClick={() => selectLayer("commerce-card")}
+          onFocus={() => selectLayer("commerce-card")}
         >
-          <strong>CineVerse</strong>
-          <span>{mode === "in-scene" ? "in scene" : "voice companion"}</span>
-        </div>
-        <div
-          className={layerClass("top-prompt", "top-prompt")}
-          data-layer-id="top-prompt"
-          data-layer-label="Voice prompt"
-          title="Voice prompt"
-          tabIndex={0}
-          onClick={(event) => {
-            event.stopPropagation();
-            selectLayer("top-prompt");
-          }}
-          onFocus={() => selectLayer("top-prompt")}
-        >
-          <span>{mode === "in-scene" ? "Scene Voice" : "Voice command"}</span>
-          <strong>
-            {mode === "generating"
-              ? "Generating CineVerse..."
-              : mode === "in-scene"
-                ? `Speak to ${activeAgent.name} or say “Director...”`
-                : "Say “Hey Vera, step into this scene”"}
-          </strong>
-        </div>
-        <button
-          className={layerClass("ghost-button", "trace-button")}
-          data-layer-id="trace-button"
-          data-layer-label="Trace toggle"
-          onClick={(event) => {
-            event.stopPropagation();
-            selectLayer("trace-button");
-            setDebugOpen((open) => !open);
-          }}
-          onFocus={() => selectLayer("trace-button")}
-        >
-          Trace
-        </button>
-      </header>
-
-      <aside
-        className={layerClass("agent-stack", "agent-stack")}
-        aria-label="Active agents"
-        data-layer-id="agent-stack"
-        data-layer-label="Character agent stack"
-        title="Character agents"
-        tabIndex={0}
-        onClick={() => selectLayer("agent-stack")}
-        onFocus={() => selectLayer("agent-stack")}
-      >
-        {agents.map((agent) => (
-          <button
-            className={`${layerClass("agent-chip", `agent-${agent.id}`)} ${
-              agent.id === activeAgentId ? "active" : ""
-            } ${
-              voiceState === "speaking" && agent.id === activeAgentId ? "speaking" : ""
-            }`}
-            key={agent.id}
-            data-layer-id={`agent-${agent.id}`}
-            data-layer-label={`${agent.name} agent chip`}
-            title={`${agent.name} agent: ${agent.role}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              selectLayer(`agent-${agent.id}`);
-              setActiveAgentId(agent.id);
-            }}
-            onFocus={() => selectLayer(`agent-${agent.id}`)}
+          <span>Exa collectible</span>
+          <strong>{commerceCollectible.title}</strong>
+          <p>{commerceCollectible.summary}</p>
+          <a
+            href={commerceCollectible.sourceUrl}
+            onClick={(event) => event.stopPropagation()}
+            target="_blank"
+            rel="noreferrer"
           >
-            <span>{agent.name.slice(0, 1)}</span>
-            <strong>{agent.name}</strong>
-            <em>{agent.role}</em>
-          </button>
-        ))}
-      </aside>
+            {commerceCollectible.sourceTitle}
+          </a>
+        </aside>
+      ) : null}
 
       <aside
         className={layerClass(
@@ -1019,36 +967,6 @@ function App() {
         </ul>
       </aside>
 
-      {centerCaption ? (
-        <section
-          className={layerClass("caption-layer", "caption-layer")}
-          aria-live="polite"
-          data-layer-id="caption-layer"
-          data-layer-label="Caption layer"
-          tabIndex={0}
-          onClick={() => selectLayer("caption-layer")}
-          onFocus={() => selectLayer("caption-layer")}
-        >
-          <p
-            className={layerClass(
-              voiceState === "listening" ? "caption listening" : "caption",
-              "live-caption",
-            )}
-            data-layer-id="live-caption"
-            data-layer-label="Live caption"
-            title="Live caption"
-            tabIndex={0}
-            onClick={(event) => {
-              event.stopPropagation();
-              selectLayer("live-caption");
-            }}
-            onFocus={() => selectLayer("live-caption")}
-          >
-            {centerCaption}
-          </p>
-        </section>
-      ) : null}
-
       <aside
         className={layerClass("response-history", "response-history")}
         aria-label="Latest response history"
@@ -1059,9 +977,14 @@ function App() {
         onClick={() => selectLayer("response-history")}
         onFocus={() => selectLayer("response-history")}
       >
-        {visibleHistory.map((item, index) => (
+        {visibleHistory.map((item, index) => {
+          const speakerAgentId = resolveAgentIdBySpeaker(item.speaker);
+          const isActiveSpeaker = Boolean(speakerAgentId && index === latestSpeakerHistoryIndex);
+          return (
           <article
-            className={layerClass("history-item", `history-item-${index}`)}
+            className={`${layerClass("history-item", `history-item-${index}`)} ${
+              isActiveSpeaker ? "speaker-highlight" : ""
+            }`}
             data-layer-id={`history-item-${index}`}
             data-layer-label={`History item ${index + 1}: ${item.speaker}`}
             key={`${item.speaker}-${item.text}-${index}`}
@@ -1075,7 +998,24 @@ function App() {
             <strong>{item.speaker}</strong>
             <p>{item.text}</p>
           </article>
-        ))}
+          );
+        })}
+        {liveTranscript ? (
+          <article
+            className={layerClass("history-item live-transcript", "live-transcript")}
+            data-layer-id="live-transcript"
+            data-layer-label="Live voice transcript"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation();
+              selectLayer("live-transcript");
+            }}
+            onFocus={() => selectLayer("live-transcript")}
+          >
+            <strong>You</strong>
+            <p>{liveTranscript}</p>
+          </article>
+        ) : null}
       </aside>
 
       {latestTool ? (
@@ -1092,23 +1032,6 @@ function App() {
           <strong>{latestTool.label}</strong>
           {latestTool.detail ? <span>{latestTool.detail}</span> : null}
         </div>
-      ) : null}
-
-      {savedMoment ? (
-        <aside
-          className={layerClass("saved-moment-card", "saved-moment-card")}
-          data-layer-id="saved-moment-card"
-          data-layer-label="Saved moment card"
-          aria-label="Saved moment card"
-          title="Saved moment card"
-          tabIndex={0}
-          onClick={() => selectLayer("saved-moment-card")}
-          onFocus={() => selectLayer("saved-moment-card")}
-        >
-          <span>Collected</span>
-          <strong>Duel in the mist</strong>
-          <p>Scene card, replica hilt, and poster saved for checkout.</p>
-        </aside>
       ) : null}
 
       {mode === "generating" ? (

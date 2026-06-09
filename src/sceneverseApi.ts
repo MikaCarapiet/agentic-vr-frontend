@@ -67,6 +67,16 @@ type BackendChatResponse = {
   agentTrace: BackendAgentTrace[];
 };
 
+type BackendResearchResponse = {
+  summary: string;
+  sources: Array<{
+    title: string;
+    url: string;
+    snippet: string;
+  }>;
+  recommendedContext: string;
+};
+
 export type SceneAnalysisRequest = {
   frame: string | null;
   timestamp: number;
@@ -112,6 +122,14 @@ export type ChatResponse = {
     description: string;
     items: string[];
   };
+};
+
+export type CommerceCollectible = {
+  title: string;
+  summary: string;
+  sourceTitle: string;
+  sourceUrl: string;
+  recommendedContext: string;
 };
 
 const apiBaseUrl = (import.meta.env.VITE_SCENEVERSE_API_BASE_URL ?? "/backend").replace(/\/$/, "");
@@ -241,6 +259,38 @@ export async function sendChat(request: ChatRequest): Promise<ChatResponse> {
   }
 
   return mockChat(request);
+}
+
+export async function findCollectible(
+  sceneId: string | null,
+  query: string,
+): Promise<CommerceCollectible> {
+  if (sceneId) {
+    const backendResponse = await postJson<BackendResearchResponse>("/api/research", {
+      sceneId,
+      query,
+    });
+
+    if (backendResponse) {
+      const primarySource = backendResponse.sources[0];
+      return {
+        title: primarySource?.title ?? "Scene collectible",
+        summary: backendResponse.summary,
+        sourceTitle: primarySource?.title ?? "Exa research result",
+        sourceUrl: primarySource?.url ?? "#",
+        recommendedContext: backendResponse.recommendedContext,
+      };
+    }
+  }
+
+  return {
+    title: "Green lightsaber replica",
+    summary:
+      "A researched collectible match for the scene: a green-blade saber hilt inspired by Yoda's defensive, mentor-like role.",
+    sourceTitle: "Exa fallback preview",
+    sourceUrl: "#",
+    recommendedContext: "Use the Exa research source here once the backend research route is reachable.",
+  };
 }
 
 function mockChat(request: ChatRequest): ChatResponse {
