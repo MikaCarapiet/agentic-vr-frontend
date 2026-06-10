@@ -78,14 +78,7 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
   }
 
   function openCatalogVideo(video: CatalogVideo) {
-    if (video.playerPlayable) {
-      onOpenVideo(video.id);
-      return;
-    }
-
-    if (video.externalUrl) {
-      window.open(video.externalUrl, "_blank", "noopener,noreferrer");
-    }
+    onOpenVideo(video.id);
   }
 
   function openCatalogVideoFromCard(event: React.MouseEvent<HTMLButtonElement>, video: CatalogVideo) {

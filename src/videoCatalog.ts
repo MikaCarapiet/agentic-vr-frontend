@@ -137,7 +137,10 @@ export function buildCatalogVideos(assets: VideoAsset[]): CatalogVideo[] {
   const seen = new Set([FALLBACK_CATALOG_VIDEO.id]);
   const backendVideos = assets.flatMap((asset) => {
     const video = catalogVideoFromAsset(asset);
-    if (!video || seen.has(video.id)) return [];
+    // Only include videos that can actually play in the app player.
+    // YouTube/external links that haven't been downloaded yet are managed
+    // in the admin catalogue, not shown on the landing page.
+    if (!video || !video.playerPlayable || seen.has(video.id)) return [];
 
     seen.add(video.id);
     return [video];
