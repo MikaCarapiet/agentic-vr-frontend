@@ -39,6 +39,7 @@ import {
 type VoiceState = "idle" | "listening" | "thinking" | "speaking" | "error";
 
 type HistoryItem = {
+  id?: string;
   speaker: string;
   text: string;
   streaming?: boolean;
@@ -181,6 +182,10 @@ function formatTime(seconds: number) {
   return `${minutes}:${remaining}`;
 }
 
+function createHistoryId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function stripRepeatedSpeaker(text: string, speaker: string) {
   const speakerName = speaker.trim();
   if (!speakerName || speakerName.toLowerCase() === "you") return text.trim();
@@ -237,6 +242,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
   const generationTimerRef = useRef<number | null>(null);
   const responseTimerRef = useRef<number | null>(null);
   const replyStreamTimerRef = useRef<number | null>(null);
+  const activeHistoryStreamIdsRef = useRef<Record<string, string>>({});
   const voiceRestartTimerRef = useRef<number | null>(null);
   const hudTimerRef = useRef<number | null>(null);
   const hudPinnedRef = useRef(false);
@@ -549,27 +555,37 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
     };
   }, []);
 
-  function upsertStreamingHistory(speaker: string, text: string) {
+  function upsertStreamingHistory(speaker: string, text: string, streamId = activeHistoryStreamIdsRef.current[speaker]) {
+    const historyId = streamId ?? createHistoryId();
+    activeHistoryStreamIdsRef.current[speaker] = historyId;
     setHistory((items) => {
       const next = [...items];
-      const latest = next[next.length - 1];
-      if (latest?.speaker === speaker && latest.streaming) {
-        next[next.length - 1] = { ...latest, text, streaming: true };
+      const existingIndex = next.findIndex((historyItem) => historyItem.id === historyId);
+      const streamingItem = { id: historyId, speaker, text, streaming: true };
+      if (existingIndex >= 0) {
+        next[existingIndex] = streamingItem;
       } else {
-        next.push({ speaker, text, streaming: true });
+        next.push(streamingItem);
       }
       return next.slice(-8);
     });
+    return historyId;
   }
 
-  function pushHistory(item: HistoryItem) {
+  function pushHistory(item: HistoryItem, streamId = activeHistoryStreamIdsRef.current[item.speaker]) {
+    const historyId = streamId ?? item.id ?? createHistoryId();
+    if (streamId && activeHistoryStreamIdsRef.current[item.speaker] === streamId) {
+      delete activeHistoryStreamIdsRef.current[item.speaker];
+    }
+
     setHistory((items) => {
       const next = [...items];
-      const latest = next[next.length - 1];
-      if (latest?.speaker === item.speaker && latest.streaming) {
-        next[next.length - 1] = { ...item, streaming: false };
+      const existingIndex = next.findIndex((historyItem) => historyItem.id === historyId);
+      const completedItem = { ...item, id: historyId, streaming: false };
+      if (existingIndex >= 0) {
+        next[existingIndex] = completedItem;
       } else {
-        next.push({ ...item, streaming: false });
+        next.push(completedItem);
       }
       return next.slice(-8);
     });
@@ -734,13 +750,13 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
 
     const chunkSize = Math.max(3, Math.ceil(trimmedResponse.length / 90));
     let nextLength = 0;
-    upsertStreamingHistory(speaker, "");
+    const responseStreamId = upsertStreamingHistory(speaker, "");
 
     replyStreamTimerRef.current = window.setInterval(() => {
       nextLength = Math.min(trimmedResponse.length, nextLength + chunkSize);
       const partial = trimmedResponse.slice(0, nextLength);
       setCaption(partial);
-      upsertStreamingHistory(speaker, partial);
+      upsertStreamingHistory(speaker, partial, responseStreamId);
 
       if (nextLength < trimmedResponse.length) return;
 
@@ -748,7 +764,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
         window.clearInterval(replyStreamTimerRef.current);
         replyStreamTimerRef.current = null;
       }
-      pushHistory({ speaker, text: trimmedResponse });
+      pushHistory({ speaker, text: trimmedResponse }, responseStreamId);
       window.setTimeout(() => {
         setVoiceState(voiceSupported ? "listening" : "idle");
         if (mode === "watching") setCaption("");
@@ -1476,7 +1492,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
               }`}
               data-layer-id={`history-item-${index}`}
               data-layer-label={`History item ${index + 1}: ${item.speaker}`}
-              key={`${item.speaker}-${item.text}-${index}`}
+              key={item.id ?? `${item.speaker}-${index}`}
               tabIndex={0}
               onClick={(event) => {
                 event.stopPropagation();
