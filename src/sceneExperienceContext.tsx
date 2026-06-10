@@ -10,6 +10,8 @@ export type SceneAgent = {
   goals?: string[];
   knowledgeBoundaries?: string[];
   speakingStyle?: string;
+  /** Normalized [left, top, right, bottom] box (0-1) from AI scene analysis. */
+  box?: [number, number, number, number] | null;
 };
 
 type SceneExperienceContextValue = {

@@ -26,6 +26,8 @@ export type CharacterAgent = {
   goals?: string[];
   knowledgeBoundaries?: string[];
   speakingStyle?: string;
+  /** Normalized [left, top, right, bottom] bounding box (0-1) in the analyzed frame. */
+  box?: [number, number, number, number] | null;
 };
 
 type BackendTraceStatus = "pending" | "complete" | "fallback" | "error";
@@ -47,6 +49,7 @@ type BackendCharacter = {
   goals: string[];
   knowledgeBoundaries: string[];
   speakingStyle: string;
+  box?: number[] | null;
 };
 
 type BackendSceneAnalysisResponse = {
@@ -762,6 +765,10 @@ function normalizeTrace(trace: BackendAgentTrace[]): AgentTrace[] {
 }
 
 function normalizeCharacter(character: BackendCharacter): CharacterAgent {
+  const box =
+    Array.isArray(character.box) && character.box.length === 4 && character.box.every((n) => typeof n === "number")
+      ? ([character.box[0], character.box[1], character.box[2], character.box[3]] as [number, number, number, number])
+      : null;
   return {
     id: character.characterId,
     name: character.name,
@@ -771,6 +778,7 @@ function normalizeCharacter(character: BackendCharacter): CharacterAgent {
     goals: character.goals,
     knowledgeBoundaries: character.knowledgeBoundaries,
     speakingStyle: character.speakingStyle,
+    box,
   };
 }
 

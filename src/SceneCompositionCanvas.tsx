@@ -1,5 +1,11 @@
 import React, { useEffect, useRef } from "react";
-import { analyzeVideoFrame, type SceneSubject, type SubjectColor } from "./sceneVision";
+import {
+  analyzeVideoFrame,
+  analyzeVideoFrameInRegions,
+  type SceneRegion,
+  type SceneSubject,
+  type SubjectColor,
+} from "./sceneVision";
 import type { SceneComposition } from "./sceneComposition";
 import type { AppMode } from "./sceneverseApi";
 
@@ -7,6 +13,8 @@ type SceneCompositionCanvasProps = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   mode: AppMode;
   fallback: SceneComposition;
+  /** AI-detected character boxes; when present they steer the edge tracing. */
+  regions?: SceneRegion[];
 };
 
 type SubjectRuntime = SceneSubject & {
@@ -106,6 +114,7 @@ export default function SceneCompositionCanvas({
   videoRef,
   mode,
   fallback,
+  regions,
 }: SceneCompositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<OverlayState>({
@@ -116,6 +125,9 @@ export default function SceneCompositionCanvas({
   });
   const fallbackRef = useRef(fallback);
   fallbackRef.current = fallback;
+  const regionsRef = useRef<SceneRegion[] | undefined>(regions);
+  regionsRef.current = regions;
+  const regionsKey = (regions ?? []).map((region) => `${region.id}:${region.box.join(",")}`).join("|");
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -142,7 +154,15 @@ export default function SceneCompositionCanvas({
     function runAnalysis(staggerIgnite: boolean) {
       const now = performance.now();
       const activeVideo = videoRef.current;
-      const result = activeVideo && activeVideo.readyState >= 2 ? analyzeVideoFrame(activeVideo) : null;
+      const videoReady = Boolean(activeVideo && activeVideo.readyState >= 2);
+      const aiRegions = regionsRef.current;
+      // AI-provided character boxes take priority; the local heuristic covers
+      // the gap before scene analysis returns (or when it has no boxes).
+      const regionResult =
+        videoReady && aiRegions && aiRegions.length > 0
+          ? analyzeVideoFrameInRegions(activeVideo as HTMLVideoElement, aiRegions)
+          : null;
+      const result = regionResult ?? (videoReady ? analyzeVideoFrame(activeVideo as HTMLVideoElement) : null);
       const rawSubjects =
         result && result.subjects.length > 0 ? result.subjects : fallbackSubjects(fallbackRef.current);
       state.usingFallback = !result || result.subjects.length === 0;
@@ -175,12 +195,18 @@ export default function SceneCompositionCanvas({
     }
 
     if (isEntry) {
-      state.entryStart = performance.now();
+      if (state.subjects.length === 0) {
+        state.entryStart = performance.now();
+      }
       // Subjects ignite as the scan beam reaches them, not on a timer.
-      state.subjects = [];
+      // When AI regions arrive mid-scan the re-run keeps the beam position.
       runAnalysis(false);
     } else if (state.subjects.length === 0) {
       state.entryStart = performance.now() - SCAN_DURATION;
+      runAnalysis(true);
+    } else {
+      // Mode persisted but inputs changed (AI character boxes arrived):
+      // refresh subjects so the trace snaps to the detected characters.
       runAnalysis(true);
     }
 
@@ -412,7 +438,7 @@ export default function SceneCompositionCanvas({
       if (reanalyzeTimer) window.clearInterval(reanalyzeTimer);
       context.clearRect(0, 0, canvas.width, canvas.height);
     };
-  }, [mode, videoRef]);
+  }, [mode, videoRef, regionsKey]);
 
   return <canvas ref={canvasRef} className="scene-composition-canvas" />;
 }

@@ -27,6 +27,7 @@ import { routeUtterance } from "./sceneRouter";
 import { logVeraDebug } from "./veraDebug";
 import { getSceneComposition } from "./sceneComposition";
 import SceneCompositionCanvas from "./SceneCompositionCanvas";
+import type { SceneRegion } from "./sceneVision";
 import "./styles.css";
 import AdminVideosPage from "./AdminVideosPage";
 import Landing from "./Landing";
@@ -282,6 +283,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   const [lastIntent, setLastIntent] = useState<Intent | "none">("none");
   const [selectedLayer, setSelectedLayer] = useState("scene-video");
   const [commerceCollectible, setCommerceCollectible] = useState<CommerceCollectible | null>(null);
+  const [characterRegions, setCharacterRegions] = useState<SceneRegion[]>([]);
   const {
     activeAgent,
     activeAgentId,
@@ -937,6 +939,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     }
     setIsPlaying(false);
     setMode("generating");
+    setCharacterRegions([]);
     setGenerationStep(0);
     setCaption("Stepping into this scene...");
     setAgentTrace([
@@ -1009,6 +1012,15 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     });
 
     applySceneAnalysis(analysis);
+    setCharacterRegions(
+      analysis.characters
+        .filter((character) => character.box)
+        .map((character) => ({
+          id: character.id,
+          label: character.name,
+          box: character.box as [number, number, number, number],
+        })),
+    );
     logTrace("scene-analysis", analysis.agentTrace);
     logAppEvent({
       category: "scene",
@@ -1673,7 +1685,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         <span className="spark spark-three" />
       </div>
       <div className="scene-composition-layer" aria-hidden="true" data-composition-id={sceneComposition.id}>
-        <SceneCompositionCanvas videoRef={videoRef} mode={mode} fallback={sceneComposition} />
+        <SceneCompositionCanvas videoRef={videoRef} mode={mode} fallback={sceneComposition} regions={characterRegions} />
       </div>
 
       {commerceCollectible ? (
