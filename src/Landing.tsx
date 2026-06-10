@@ -6,6 +6,7 @@ type Props = {
   videos: CatalogVideo[];
   isLoading?: boolean;
   onOpenVideo: (videoId: string) => void;
+  onOpenMovieCatalog: () => void;
 };
 
 const CAROUSEL_INTERVAL_MS = 4000;
@@ -89,7 +90,7 @@ function useVideoThumbnail(src: string, seekTime = 1.5) {
   return dataUrl;
 }
 
-export default function Landing({ videos, isLoading = false, onOpenVideo }: Props) {
+export default function Landing({ videos, isLoading = false, onOpenVideo, onOpenMovieCatalog }: Props) {
   const carouselVideos = videos.length ? videos : [FALLBACK_CATALOG_VIDEO];
   const [featuredIndex, setFeaturedIndex] = useState(() => randomVideoIndex(carouselVideos.length));
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -139,10 +140,6 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
   function featureVideo(videoId: string) {
     const nextIndex = carouselVideos.findIndex((video) => video.id === videoId);
     if (nextIndex >= 0) setFeaturedIndex(nextIndex);
-  }
-
-  function scrollToCatalog() {
-    document.getElementById("scene-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function previewCardFromKeyboard(event: React.KeyboardEvent<HTMLElement>, videoId: string) {
@@ -204,7 +201,9 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
           <strong>CineVerse</strong>
         </div>
         <div className="lnd-nav-actions">
-          <span className="lnd-token">100 scene credits</span>
+          <button className="lnd-nav-catalog" onClick={onOpenMovieCatalog}>
+            Movie Catalog
+          </button>
           <button
             className={`lnd-fullscreen-button${isFullscreen ? " active" : ""}`}
             type="button"
@@ -250,9 +249,6 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
               <button className="lnd-btn-primary" onClick={openFeaturedVideo}>
                 {featuredVideo.playerPlayable ? "Watch now" : "Open source"}
               </button>
-              <button className="lnd-btn-secondary" onClick={scrollToCatalog}>
-                View all scenes
-              </button>
             </div>
 
             <div
@@ -280,10 +276,11 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
         <section className="lnd-section lnd-catalog" id="scene-catalog" aria-labelledby="catalog-title">
           <div className="lnd-section-header">
             <h2 id="catalog-title">Growing Universes</h2>
-            <div className="lnd-section-actions">
-              {isLoading ? <span className="lnd-loading-pill">Syncing backend</span> : null}
-              <button onClick={scrollToCatalog}>View all</button>
-            </div>
+            {isLoading ? (
+              <div className="lnd-section-actions">
+                <span className="lnd-loading-pill">Syncing backend</span>
+              </div>
+            ) : null}
           </div>
 
           <div className="lnd-universe-row" key={`row-${featuredVideo.id}`}>

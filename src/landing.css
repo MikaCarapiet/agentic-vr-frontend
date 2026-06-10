@@ -116,6 +116,27 @@
   content: "";
 }
 
+.lnd-nav-catalog {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid rgba(120, 216, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(120, 216, 255, 0.08);
+  color: #78d8ff;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.lnd-nav-catalog:hover {
+  border-color: rgba(120, 216, 255, 0.45);
+  background: rgba(120, 216, 255, 0.14);
+  color: #a8e8ff;
+}
+
 .lnd-nav-link,
 .lnd-section-header button {
   border: none;
@@ -218,7 +239,7 @@
   object-fit: cover;
   object-position: 57% 50%;
   opacity: 0;
-  filter: saturate(0.68) contrast(1.05) brightness(0.72) hue-rotate(174deg);
+  filter: saturate(0.9) contrast(1.0) brightness(1.0);
   transform: scale(1.01);
   transition: opacity 600ms ease;
   user-select: none;
@@ -242,8 +263,8 @@
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(4, 6, 15, 0.98) 0%, rgba(4, 6, 15, 0.72) 31%, rgba(4, 6, 15, 0.2) 58%, rgba(4, 6, 15, 0.74) 100%),
-    linear-gradient(180deg, rgba(4, 6, 15, 0.12) 0%, rgba(4, 6, 15, 0.22) 52%, #04060f 99%);
+    linear-gradient(90deg, rgba(4, 6, 15, 0.62) 0%, rgba(4, 6, 15, 0.32) 38%, rgba(4, 6, 15, 0.04) 62%, transparent 100%),
+    linear-gradient(180deg, transparent 0%, transparent 45%, rgba(4, 6, 15, 0.45) 99%);
 }
 
 .lnd-hero-script {
@@ -742,8 +763,8 @@
 
   .lnd-hero-vignette {
     background:
-      linear-gradient(90deg, rgba(4, 6, 15, 0.96) 0%, rgba(4, 6, 15, 0.7) 58%, rgba(4, 6, 15, 0.54) 100%),
-      linear-gradient(180deg, rgba(4, 6, 15, 0.1) 0%, rgba(4, 6, 15, 0.32) 52%, #04060f 99%);
+      linear-gradient(90deg, rgba(4, 6, 15, 0.62) 0%, rgba(4, 6, 15, 0.3) 58%, transparent 100%),
+      linear-gradient(180deg, transparent 0%, transparent 45%, rgba(4, 6, 15, 0.45) 99%);
   }
 
   .lnd-hero-script {

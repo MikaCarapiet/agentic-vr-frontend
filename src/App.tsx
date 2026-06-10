@@ -1915,6 +1915,7 @@ export default function Root() {
         videos={videos}
         isLoading={catalogLoading}
         onOpenVideo={(videoId) => navigateTo(videoPath(videoId))}
+        onOpenMovieCatalog={() => navigateTo("/admin/videos")}
       />
     );
   }
