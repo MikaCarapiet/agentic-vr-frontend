@@ -37,6 +37,12 @@ const SCAN_DURATION = 1500;
 const BURST_DURATION = 680;
 const BRACKET_DURATION = 460;
 const REANALYZE_INTERVAL = 1800;
+const FALLBACK_COLORS: SubjectColor[] = [
+  { r: 255, g: 96, b: 96 },
+  { r: 96, g: 247, b: 161 },
+  { r: 118, g: 188, b: 255 },
+  { r: 255, g: 198, b: 88 },
+];
 
 function easeInOutCubic(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -67,6 +73,13 @@ function pseudoRandom(seed: number) {
   return value - Math.floor(value);
 }
 
+function fallbackColorFor(characterId: string, index: number): SubjectColor {
+  const id = characterId.toLowerCase();
+  if (id.includes("yoda")) return { r: 96, g: 247, b: 161 };
+  if (id.includes("vader")) return { r: 255, g: 96, b: 96 };
+  return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+}
+
 function fallbackSubjects(composition: SceneComposition): SceneSubject[] {
   return composition.characters.map((character, index) => {
     const cx = character.x / 100;
@@ -90,7 +103,7 @@ function fallbackSubjects(composition: SceneComposition): SceneSubject[] {
       y0: cy - halfHeight,
       x1: cx + halfWidth,
       y1: cy + halfHeight,
-      color: { r: 110, g: 195, b: 255 },
+      color: fallbackColorFor(character.id, index),
       axisAngle: Math.PI / 2,
       energy: Math.max(0.45, 1 - index * 0.18),
       contour,
@@ -156,16 +169,21 @@ export default function SceneCompositionCanvas({
       const activeVideo = videoRef.current;
       const videoReady = Boolean(activeVideo && activeVideo.readyState >= 2);
       const aiRegions = regionsRef.current;
-      // AI-provided character boxes take priority; the local heuristic covers
-      // the gap before scene analysis returns (or when it has no boxes).
+      // AI-provided character boxes take priority. Before they arrive, prefer
+      // authored character anchors over full-frame heuristics so background
+      // highlights, branches, and props do not become scan targets.
+      const anchoredSubjects = fallbackSubjects(fallbackRef.current);
       const regionResult =
         videoReady && aiRegions && aiRegions.length > 0
           ? analyzeVideoFrameInRegions(activeVideo as HTMLVideoElement, aiRegions)
           : null;
-      const result = regionResult ?? (videoReady ? analyzeVideoFrame(activeVideo as HTMLVideoElement) : null);
-      const rawSubjects =
-        result && result.subjects.length > 0 ? result.subjects : fallbackSubjects(fallbackRef.current);
-      state.usingFallback = !result || result.subjects.length === 0;
+      const heuristicResult =
+        !regionResult && anchoredSubjects.length === 0 && videoReady
+          ? analyzeVideoFrame(activeVideo as HTMLVideoElement)
+          : null;
+      const result = regionResult ?? heuristicResult;
+      const rawSubjects = result && result.subjects.length > 0 ? result.subjects : anchoredSubjects;
+      state.usingFallback = rawSubjects.length === 0;
       const previous = state.subjects;
       if (import.meta.env.DEV) {
         (window as typeof window & { __sceneVisionDebug?: unknown }).__sceneVisionDebug = {
@@ -254,6 +272,18 @@ export default function SceneCompositionCanvas({
       const activeVideo = videoRef.current;
       if (!canvas || !activeVideo || activeVideo.videoWidth === 0) {
         return { x: 0, y: 0, w: canvas?.width ?? 0, h: canvas?.height ?? 0 };
+      }
+      const canvasBox = canvas.getBoundingClientRect();
+      const videoBox = activeVideo.getBoundingClientRect();
+      if (canvasBox.width > 0 && canvasBox.height > 0 && videoBox.width > 0 && videoBox.height > 0) {
+        const scaleX = canvas.width / canvasBox.width;
+        const scaleY = canvas.height / canvasBox.height;
+        return {
+          x: (videoBox.left - canvasBox.left) * scaleX,
+          y: (videoBox.top - canvasBox.top) * scaleY,
+          w: videoBox.width * scaleX,
+          h: videoBox.height * scaleY,
+        };
       }
       const scale = Math.max(canvas.width / activeVideo.videoWidth, canvas.height / activeVideo.videoHeight);
       const w = activeVideo.videoWidth * scale;

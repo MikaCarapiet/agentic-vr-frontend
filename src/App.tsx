@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   analyzeScene,
+  buildCollectiblePlaceholderImage,
   createRealtimeTranscriptionToken,
   downloadVideo,
   findCollectible,
@@ -61,6 +62,13 @@ type FormattedHistorySegment = {
 type ToolEvent = {
   label: string;
   detail?: string;
+};
+
+type CommerceCartState = "idle" | "awaiting_confirmation" | "added";
+
+type CartItem = CommerceCollectible & {
+  id: string;
+  quantity: number;
 };
 
 type InSceneCommand = {
@@ -174,6 +182,24 @@ function parseWakeCommand(text: string): WakeCommandParse {
   };
 }
 
+function normalizeCommerceCartDecision(text: string): "yes" | "no" | null {
+  const normalized = text
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?,;:"']/g, "")
+    .replace(/\s+/g, " ");
+
+  if (normalized === "yes") return "yes";
+  if (normalized === "no") return "no";
+  return null;
+}
+
+function matchCartCommand(text: string): "open" | "close" | null {
+  if (/\b(open|show|view)\s+(the\s+|my\s+)?cart\b/i.test(text)) return "open";
+  if (/\b(close|hide|dismiss)\s+(the\s+|my\s+)?cart\b/i.test(text)) return "close";
+  return null;
+}
+
 function isStopListeningCommand(text: string) {
   return /\b(stop listening|mute|turn off (the )?(mic|microphone)|disable (the )?(mic|microphone))\b/i.test(
     text,
@@ -283,6 +309,9 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   const [lastIntent, setLastIntent] = useState<Intent | "none">("none");
   const [selectedLayer, setSelectedLayer] = useState("scene-video");
   const [commerceCollectible, setCommerceCollectible] = useState<CommerceCollectible | null>(null);
+  const [commerceCartState, setCommerceCartState] = useState<CommerceCartState>("idle");
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [characterRegions, setCharacterRegions] = useState<SceneRegion[]>([]);
   const {
     activeAgent,
@@ -299,6 +328,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   } = useSceneExperience();
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const visibleHistory = history.slice(-4);
+  const cartItemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
   const centerCaption =
     caption && caption !== "Say “step into this scene”" ? caption : "";
   const hudPinned =
@@ -1207,6 +1237,96 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     activateVeraSession();
   }
 
+  function promptForCommerceCartDecision(collectible: CommerceCollectible) {
+    setCommerceCollectible(collectible);
+    setCommerceCartState("awaiting_confirmation");
+    speakResponse(
+      collectible.sourceUrl === "#"
+        ? "I found a possible collectible match. Do you want to add it to cart? Answer yes or no only."
+        : `I found a likely match: ${collectible.title}. Do you want to add it to cart? Answer yes or no only.`,
+      "Director",
+    );
+  }
+
+  function addCollectibleToCart(collectible: CommerceCollectible) {
+    const id = collectible.sourceUrl !== "#" ? collectible.sourceUrl : collectible.title;
+    setCartItems((items) => {
+      const existingIndex = items.findIndex((item) => item.id === id);
+      if (existingIndex < 0) return [{ ...collectible, id, quantity: 1 }, ...items];
+
+      return items.map((item, index) =>
+        index === existingIndex ? { ...item, quantity: item.quantity + 1 } : item,
+      );
+    });
+    setCartOpen(true);
+  }
+
+  function handleCartCommand(utterance: string) {
+    const command = matchCartCommand(utterance);
+    if (!command) return false;
+
+    const nextOpen = command === "open";
+    setCartOpen(nextOpen);
+    showTool({
+      label: nextOpen ? "Cart opened" : "Cart closed",
+      detail: cartItemCount > 0 ? `${cartItemCount} item${cartItemCount === 1 ? "" : "s"}` : "cart empty",
+    });
+    speakResponse(
+      nextOpen
+        ? cartItemCount > 0
+          ? "Cart is open."
+          : "Cart is open. It is empty."
+        : "Cart is closed.",
+      "Vera",
+    );
+    return true;
+  }
+
+  function handleCommerceCartDecision(utterance: string) {
+    if (commerceCartState !== "awaiting_confirmation" || !commerceCollectible) return false;
+
+    const decision = normalizeCommerceCartDecision(utterance);
+    if (!decision) {
+      showTool({ label: "Cart confirmation", detail: "Answer yes or no only" });
+      speakResponse("Please answer yes or no only.", "Director");
+      return true;
+    }
+
+    if (decision === "yes") {
+      addCollectibleToCart(commerceCollectible);
+      setCommerceCartState("added");
+      showTool({ label: "Cart request", detail: commerceCollectible.title });
+      logAppEvent({
+        category: "commerce",
+        label: "Add to cart acknowledged",
+        detail: commerceCollectible.title,
+        status: "done",
+        metadata: {
+          sourceUrl: commerceCollectible.sourceUrl,
+          sourceTitle: commerceCollectible.sourceTitle,
+        },
+      });
+      speakResponse("Will add to cart.", "Director");
+      return true;
+    }
+
+    setCommerceCartState("idle");
+    setCommerceCollectible(null);
+    showTool({ label: "Scene resumed", detail: "commerce recommendation skipped" });
+    logAppEvent({
+      category: "commerce",
+      label: "Cart recommendation declined",
+      detail: commerceCollectible.title,
+      status: "done",
+      metadata: {
+        sourceUrl: commerceCollectible.sourceUrl,
+        sourceTitle: commerceCollectible.sourceTitle,
+      },
+    });
+    speakResponse("Resuming back to the scene.", "Director");
+    return true;
+  }
+
   async function handleUtterancePayload(utterance: string) {
     logVeraDebug("utterance payload", {
       utterance,
@@ -1216,6 +1336,9 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
       veraSessionActive: veraSessionActiveRef.current,
     });
     setVoiceState("thinking");
+
+    if (handleCommerceCartDecision(utterance)) return;
+    if (handleCartCommand(utterance)) return;
 
     if (/\b(back to landing|go home|home page|landing page|return home|exit video)\b/i.test(utterance)) {
       logAppEvent({ category: "system", label: "Return to landing", detail: utterance, status: "done" });
@@ -1331,12 +1454,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         label: collectible.sourceUrl === "#" ? "Collectible fallback" : "Collectible found",
         detail: collectible.sourceTitle,
       });
-      speakResponse(
-        collectible.sourceUrl === "#"
-          ? "I could not confirm a live product yet, but I saved a likely match."
-          : `I found a likely match: ${collectible.title}.`,
-        "Director",
-      );
+      promptForCommerceCartDecision(collectible);
       return;
     }
 
@@ -1458,6 +1576,12 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
           objectLabel: route.objectLabel,
         },
       });
+      showTool({
+        label: collectible.sourceUrl === "#" ? "Collectible fallback" : "Collectible found",
+        detail: collectible.sourceTitle,
+      });
+      promptForCommerceCartDecision(collectible);
+      return;
     }
 
     window.setTimeout(() => {
@@ -1678,6 +1802,24 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         {vrActive ? "Exit VR" : "VR"}
       </button>
 
+      <button
+        className={layerClass("home-button cart-button", "cart-button")}
+        data-layer-id="cart-button"
+        data-layer-label={cartOpen ? "Close cart" : "Open cart"}
+        aria-label={cartOpen ? "Close cart" : "Open cart"}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          selectLayer("cart-button");
+          setCartOpen((open) => !open);
+          revealHud();
+        }}
+        onFocus={() => selectLayer("cart-button")}
+      >
+        Cart
+        {cartItemCount > 0 ? <span className="cart-count">{cartItemCount}</span> : null}
+      </button>
+
       <div className="scene-vignette" />
       <div className="ambient-field" aria-hidden="true">
         <span className="spark spark-one" />
@@ -1687,6 +1829,59 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
       <div className="scene-composition-layer" aria-hidden="true" data-composition-id={sceneComposition.id}>
         <SceneCompositionCanvas videoRef={videoRef} mode={mode} fallback={sceneComposition} regions={characterRegions} />
       </div>
+
+      {cartOpen ? (
+        <aside
+          className={layerClass("cart-panel", "cart-panel")}
+          data-layer-id="cart-panel"
+          data-layer-label="Shopping cart"
+          aria-label="Shopping cart"
+          tabIndex={0}
+          onClick={() => selectLayer("cart-panel")}
+          onFocus={() => selectLayer("cart-panel")}
+        >
+          <header>
+            <span>Scene cart</span>
+            <button
+              type="button"
+              aria-label="Close cart"
+              onClick={(event) => {
+                event.stopPropagation();
+                setCartOpen(false);
+              }}
+            >
+              Close
+            </button>
+          </header>
+          {cartItems.length > 0 ? (
+            <div className="cart-items">
+              {cartItems.map((item) => (
+                <article className="cart-item" key={item.id}>
+                  <img
+                    src={item.imageUrl}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={(event) => {
+                      const image = event.currentTarget;
+                      if (image.dataset.fallbackApplied === "true") return;
+                      image.dataset.fallbackApplied = "true";
+                      image.src = buildCollectiblePlaceholderImage(item.title);
+                    }}
+                  />
+                  <div>
+                    <strong>{item.title}</strong>
+                    <span>{item.sourceTitle}</span>
+                    <em>Qty {item.quantity}</em>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="cart-empty">No scene items added yet.</p>
+          )}
+        </aside>
+      ) : null}
 
       {commerceCollectible ? (
         <aside
@@ -1699,17 +1894,69 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
           onClick={() => selectLayer("commerce-card")}
           onFocus={() => selectLayer("commerce-card")}
         >
-          <span>Exa collectible</span>
-          <strong>{commerceCollectible.title}</strong>
-          <p>{commerceCollectible.summary}</p>
-          <a
-            href={commerceCollectible.sourceUrl}
-            onClick={(event) => event.stopPropagation()}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {commerceCollectible.sourceTitle}
-          </a>
+          <img
+            alt={`${commerceCollectible.title} product preview`}
+            className="commerce-card-image"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            src={commerceCollectible.imageUrl}
+            onError={(event) => {
+              const image = event.currentTarget;
+              if (image.dataset.fallbackApplied === "true") return;
+              image.dataset.fallbackApplied = "true";
+              image.src = buildCollectiblePlaceholderImage(commerceCollectible.title);
+            }}
+          />
+          <div className="commerce-card-copy">
+            <span className="commerce-card-kicker">
+              {commerceCartState === "awaiting_confirmation"
+                ? "Add to cart?"
+                : commerceCartState === "added"
+                  ? "Cart request"
+                  : "Exa collectible"}
+            </span>
+            <strong>{commerceCollectible.title}</strong>
+            <p>{commerceCollectible.summary}</p>
+            {commerceCollectible.sourceUrl === "#" ? (
+              <span className="commerce-source-disabled">{commerceCollectible.sourceTitle}</span>
+            ) : (
+              <a
+                href={commerceCollectible.sourceUrl}
+                onClick={(event) => event.stopPropagation()}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {commerceCollectible.sourceTitle}
+              </a>
+            )}
+          </div>
+          {commerceCartState === "awaiting_confirmation" ? (
+            <div className="commerce-actions" aria-label="Add item to cart confirmation">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleUtterance("yes");
+                }}
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleUtterance("no");
+                }}
+              >
+                No
+              </button>
+              <span>Say yes or no only</span>
+            </div>
+          ) : commerceCartState === "added" ? (
+            <div className="commerce-actions commerce-actions-done" aria-label="Cart add acknowledged">
+              <span>Will add to cart</span>
+            </div>
+          ) : null}
         </aside>
       ) : null}
 

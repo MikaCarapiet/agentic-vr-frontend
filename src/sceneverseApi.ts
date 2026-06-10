@@ -97,6 +97,7 @@ type BackendResearchResponse = {
     title: string;
     url: string;
     snippet: string;
+    imageUrl?: string | null;
   }>;
   recommendedContext: string;
 };
@@ -185,6 +186,7 @@ export type CommerceCollectible = {
   summary: string;
   sourceTitle: string;
   sourceUrl: string;
+  imageUrl: string;
   recommendedContext: string;
 };
 
@@ -258,6 +260,38 @@ const sceneAnalysisTimeoutMs = 45000;
 const characterRouterTimeoutMs = 10000;
 const characterChatTimeoutMs = 30000;
 const researchTimeoutMs = 45000;
+
+export function buildCollectiblePlaceholderImage(title: string) {
+  const label = title.trim().slice(0, 54) || "Scene collectible";
+  const safeLabel = label.replace(/[<>&]/g, "");
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#241a0d"/>
+          <stop offset="1" stop-color="#08090c"/>
+        </linearGradient>
+        <linearGradient id="box" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#f5c56e"/>
+          <stop offset="1" stop-color="#7fc6ff"/>
+        </linearGradient>
+      </defs>
+      <rect width="640" height="420" rx="34" fill="url(#bg)"/>
+      <rect x="72" y="58" width="496" height="304" rx="28" fill="#111217" stroke="#f5c56e" stroke-width="3" opacity="0.92"/>
+      <path d="M220 150h200l44 52v102H176V202z" fill="#16191f" stroke="#f5c56e" stroke-width="4"/>
+      <path d="M220 150l-44 52h288l-44-52z" fill="url(#box)" opacity="0.78"/>
+      <path d="M320 150v154" stroke="#f5c56e" stroke-width="3" opacity="0.5"/>
+      <circle cx="320" cy="232" r="38" fill="#ff3156" opacity="0.18"/>
+      <text x="320" y="342" text-anchor="middle" fill="#f6f2e9" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800">${safeLabel}</text>
+      <text x="320" y="376" text-anchor="middle" fill="#f5c56e" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="4">PRODUCT PREVIEW</text>
+    </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function buildCollectiblePreviewImage(sourceUrl: string | null | undefined, title: string) {
+  if (!sourceUrl || sourceUrl === "#") return buildCollectiblePlaceholderImage(title);
+  return `https://api.microlink.io/?url=${encodeURIComponent(sourceUrl)}&screenshot=true&embed=screenshot.url`;
+}
 
 export function resolveBackendAssetUrl(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -1047,6 +1081,9 @@ export async function findCollectible(
         summary: backendResponse.summary,
         sourceTitle: primarySource?.title ?? "Exa research result",
         sourceUrl: primarySource?.url ?? "#",
+        imageUrl:
+          primarySource?.imageUrl ??
+          buildCollectiblePreviewImage(primarySource?.url, primarySource?.title ?? "Scene collectible"),
         recommendedContext: backendResponse.recommendedContext,
       };
     }
@@ -1058,6 +1095,7 @@ export async function findCollectible(
       "A placeholder collectible match for this scene. Connect Exa results to ground this in the current movie moment and visible objects.",
     sourceTitle: "Exa fallback preview",
     sourceUrl: "#",
+    imageUrl: buildCollectiblePlaceholderImage("Scene collectible"),
     recommendedContext: "Use the Exa research source here once the backend research route is reachable.",
   };
 }
