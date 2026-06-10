@@ -58,12 +58,19 @@ Explicit local backend mode, only when you are running FastAPI on `localhost:800
 npm run dev:local
 ```
 
+For backend development against the shared cloud database, start FastAPI with:
+
+```bash
+cd ../agentic-vr-backend/backend
+./scripts/run_cloud_backend_local.sh
+```
+
 Restart the dev server when switching modes because Vite loads proxy config on startup. The profile controls the
 whole environment bundle:
 
 ```text
 cloud -> EC2 backend, RDS Postgres, S3/CloudFront media
-local -> localhost backend, local SQLite, local media files
+local -> localhost backend; use backend script above for RDS Postgres + S3/CloudFront
 ```
 
 ## Backend contract
