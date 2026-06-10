@@ -21,6 +21,7 @@ export type FrontendRoute = {
   targetAgentId?: string;
   explicitTargetAgentId?: string;
   action?: ChatResponse["action"];
+  actionSeconds?: number;
   objectLabel?: string;
   response?: string;
   tool: {
@@ -41,32 +42,35 @@ type RouteUtteranceInput = {
 const videoCommandPatterns: Array<{
   action: ChatResponse["action"];
   pattern: RegExp;
-  response: string;
-  detail: string;
+  defaultSeconds?: number;
+  response: (seconds?: number) => string;
+  detail: (seconds?: number) => string;
 }> = [
   {
     action: "pause",
     pattern: /\b(pause|hold|stop the video|stop video)\b/i,
-    response: "Paused.",
-    detail: "pause video",
+    response: () => "Paused.",
+    detail: () => "pause video",
   },
   {
     action: "play",
-    pattern: /\b(play|continue|resume|start the video|start video)\b/i,
-    response: "Playing.",
-    detail: "play video",
+    pattern: /\b(play|continue|resume|start the video|start video|play the scene|play scene)\b/i,
+    response: () => "Playing.",
+    detail: () => "play video",
   },
   {
     action: "rewind",
-    pattern: /\b(rewind|go back|back 10|back ten)\b/i,
-    response: "Rewinding 10 seconds.",
-    detail: "rewind 10 seconds",
+    pattern: /\b(rewind|go back|back|skip back)\b/i,
+    defaultSeconds: 10,
+    response: (seconds = 10) => `Rewinding ${seconds} seconds.`,
+    detail: (seconds = 10) => `rewind ${seconds} seconds`,
   },
   {
     action: "forward",
-    pattern: /\b(fast forward|skip ahead|forward 20|forward twenty|next 20|next twenty)\b/i,
-    response: "Skipping ahead 20 seconds.",
-    detail: "fast forward 20 seconds",
+    pattern: /\b(fast forward|skip ahead|forward|next|jump ahead)\b/i,
+    defaultSeconds: 20,
+    response: (seconds = 20) => `Skipping ahead ${seconds} seconds.`,
+    detail: (seconds = 20) => `fast forward ${seconds} seconds`,
   },
 ];
 
@@ -115,6 +119,49 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+const numberWords: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fourty: 40,
+  fifty: 50,
+  sixty: 60,
+};
+
+function parseSpokenDurationSeconds(text: string, fallbackSeconds?: number) {
+  const numericMatch = text.match(/\b(\d{1,3})\s*(second|seconds|sec|secs|s|minute|minutes|min|mins|m)?\b/i);
+  if (numericMatch) {
+    const amount = Number(numericMatch[1]);
+    const unit = numericMatch[2]?.toLowerCase() ?? "seconds";
+    return unit.startsWith("m") ? amount * 60 : amount;
+  }
+
+  const wordPattern = Object.keys(numberWords).join("|");
+  const wordMatch = text.match(new RegExp(`\\b(${wordPattern})(?:\\s+(second|seconds|sec|secs|minute|minutes|min|mins))?\\b`, "i"));
+  if (wordMatch) {
+    const amount = numberWords[wordMatch[1].toLowerCase()];
+    const unit = wordMatch[2]?.toLowerCase() ?? "seconds";
+    return unit.startsWith("m") ? amount * 60 : amount;
+  }
+
+  return fallbackSeconds;
+}
+
 export function routeUtterance({
   utterance,
   mode,
@@ -129,19 +176,21 @@ export function routeUtterance({
 
   const videoCommand = videoCommandPatterns.find((command) => command.pattern.test(text));
   if (videoCommand) {
+    const actionSeconds = parseSpokenDurationSeconds(text, videoCommand.defaultSeconds);
     return {
       kind: "video_control",
       intent: "video_control",
       action: videoCommand.action,
-      response: videoCommand.response,
-      tool: { label: "Router: video command", detail: videoCommand.detail },
-      agentTrace: trace(`routed to video tool: ${videoCommand.detail}`),
+      actionSeconds,
+      response: videoCommand.response(actionSeconds),
+      tool: { label: "Router: video command", detail: videoCommand.detail(actionSeconds) },
+      agentTrace: trace(`routed to video tool: ${videoCommand.detail(actionSeconds)}`),
     };
   }
 
   if (
     mode === "watching" &&
-    (/\b(step into|enter|generate|open|create).*\b(scene|ciniverse|moment)\b/i.test(text) ||
+    (/\b(step into|enter|generate|open|create).*\b(scene|vera|moment)\b/i.test(text) ||
       /\bstep into this scene\b/i.test(text))
   ) {
     return {

@@ -100,10 +100,10 @@ export default function MovieCatalogPage({ videos, isLoading = false, onOpenVide
 
   return (
     <div className="movie-catalog">
-      <nav className="cat-nav" aria-label="CineVerse navigation">
+      <nav className="cat-nav" aria-label="Vera navigation">
         <button className="cat-nav-brand" type="button" onClick={onGoHome}>
           <span className="cat-logo-mark" aria-hidden="true" />
-          <strong>CineVerse</strong>
+          <strong>Vera</strong>
         </button>
         <TopNavActions onBrowseAll={onGoHome} onOpenAdmin={onOpenAdmin} activePage="browse" />
       </nav>

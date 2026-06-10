@@ -73,7 +73,7 @@ export default function LogsPage() {
     <main className="logs-page">
       <header className="logs-header">
         <div>
-          <a className="logs-back" href="/">CineVerse</a>
+          <a className="logs-back" href="/">Vera</a>
           <h1>Agent behavior logs</h1>
           <p>Router decisions, agent traces, API fallbacks, voice state, and commerce enrichment.</p>
         </div>

@@ -94,10 +94,10 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
 
   return (
     <div className="landing">
-      <nav className="lnd-nav" aria-label="CineVerse navigation">
+      <nav className="lnd-nav" aria-label="Vera navigation">
         <div className="lnd-nav-brand">
           <span className="lnd-logo-mark" aria-hidden="true" />
-          <strong>CineVerse</strong>
+          <strong>Vera</strong>
         </div>
         <TopNavActions onBrowseAll={onOpenCatalog} onOpenAdmin={onOpenAdmin} />
       </nav>

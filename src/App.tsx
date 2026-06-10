@@ -29,6 +29,7 @@ import AdminVideosPage from "./AdminVideosPage";
 import Landing from "./Landing";
 import LogsPage from "./LogsPage";
 import MovieCatalogPage from "./MovieCatalogPage";
+import StereoViewer from "./StereoViewer";
 import { SceneExperienceProvider, useSceneExperience } from "./sceneExperienceContext";
 import {
   buildCatalogVideos,
@@ -224,17 +225,18 @@ function formatHistoryText(text: string, speaker: string): FormattedHistorySegme
 type AppProps = {
   video: CatalogVideo;
   onExit: () => void;
+  presentationOnly?: boolean;
 };
 
-function App({ video: sceneVideo, onExit }: AppProps) {
+function App({ video: sceneVideo, onExit, presentationOnly = false }: AppProps) {
   return (
     <SceneExperienceProvider>
-      <SceneExperienceView video={sceneVideo} onExit={onExit} />
+      <SceneExperienceView video={sceneVideo} onExit={onExit} presentationOnly={presentationOnly} />
     </SceneExperienceProvider>
   );
 }
 
-function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
+function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = false }: AppProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const voiceInputRef = useRef<VoiceInputController | null>(null);
   const handleVoiceFinalRef = useRef<(utterance: string) => void>(() => {});
@@ -440,6 +442,17 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
   useEffect(() => {
     let cancelled = false;
 
+    if (presentationOnly) {
+      voiceEnabledRef.current = false;
+      setVoiceEnabled(false);
+      setVoiceSupported(false);
+      setVoiceState("idle");
+      setCaption("");
+      return () => {
+        cancelled = true;
+      };
+    }
+
     async function startOpenAIRealtime() {
       logVeraDebug("voice bootstrap", {
         supported: isOpenAIRealtimeTranscriptionSupported(),
@@ -554,7 +567,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
       voiceInputRef.current?.stop();
       voiceInputRef.current = null;
     };
-  }, []);
+  }, [presentationOnly]);
 
   function upsertStreamingHistory(speaker: string, text: string, streamId = activeHistoryStreamIdsRef.current[speaker]) {
     const historyId = streamId ?? createHistoryId();
@@ -956,10 +969,12 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
     onExit();
   }
 
-  async function handleVideoControl(action: ChatResponse["action"]) {
+  async function handleVideoControl(action: ChatResponse["action"], actionSeconds?: number) {
     const video = videoRef.current;
+    const skipSeconds = actionSeconds ?? (action === "rewind" ? 10 : 20);
     logVeraDebug("video control requested", {
       action,
+      actionSeconds: skipSeconds,
       hasVideo: Boolean(video),
       paused: video?.paused,
       currentTime: video?.currentTime,
@@ -976,6 +991,10 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
     }
 
     if (action === "play") {
+      if (mode === "in-scene") {
+        setMode("watching");
+        setActiveAgentId("director");
+      }
       const played = await playVideo();
       logVeraDebug("video play result", {
         played,
@@ -989,21 +1008,21 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
     }
 
     if (action === "rewind") {
-      video.currentTime = Math.max(0, video.currentTime - 10);
+      video.currentTime = Math.max(0, video.currentTime - skipSeconds);
       setCurrentTime(video.currentTime);
-      logAppEvent({ category: "playback", label: "Rewind", detail: "-10 seconds", status: "done", metadata: { currentTime: video.currentTime } });
-      showTool({ label: "Tool: rewind", detail: "-10 seconds" });
+      logAppEvent({ category: "playback", label: "Rewind", detail: `-${skipSeconds} seconds`, status: "done", metadata: { currentTime: video.currentTime } });
+      showTool({ label: "Tool: rewind", detail: `-${skipSeconds} seconds` });
       return true;
     }
 
     if (action === "forward") {
       video.currentTime = Math.min(
-        duration || video.duration || video.currentTime + 20,
-        video.currentTime + 20,
+        duration || video.duration || video.currentTime + skipSeconds,
+        video.currentTime + skipSeconds,
       );
       setCurrentTime(video.currentTime);
-      logAppEvent({ category: "playback", label: "Fast forward", detail: "+20 seconds", status: "done", metadata: { currentTime: video.currentTime } });
-      showTool({ label: "Tool: fast forward", detail: "+20 seconds" });
+      logAppEvent({ category: "playback", label: "Fast forward", detail: `+${skipSeconds} seconds`, status: "done", metadata: { currentTime: video.currentTime } });
+      showTool({ label: "Tool: fast forward", detail: `+${skipSeconds} seconds` });
       return true;
     }
 
@@ -1069,11 +1088,11 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
     showTool(route.tool);
 
     if (route.kind === "video_control") {
-      const handled = await handleVideoControl(route.action);
+      const handled = await handleVideoControl(route.action, route.actionSeconds);
       setLastIntent("video_control");
       speakResponse(
         !handled ? "Playback needs a tap first." : route.response ?? "Done.",
-        "CineVerse",
+        "Vera",
       );
       return;
     }
@@ -1241,7 +1260,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
 
     if (finalIntent === "video_control") {
       await handleVideoControl(routed.action);
-      speakResponse(routed.response ?? "Done.", "CineVerse");
+      speakResponse(routed.response ?? "Done.", "Vera");
       return;
     }
 
@@ -1810,7 +1829,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
           </div>
           <span>Landscape required</span>
           <strong>Rotate your phone</strong>
-          <p>CineVerse is built for horizontal viewing so the scene stays immersive.</p>
+          <p>Vera is built for horizontal viewing so the scene stays immersive.</p>
         </div>
       </section>
 
@@ -1822,6 +1841,7 @@ type AppRoute =
   | { name: "adminVideos" }
   | { name: "catalog" }
   | { name: "logs" }
+  | { name: "stereoVideo"; videoId: string }
   | { name: "videos" }
   | { name: "video"; videoId: string };
 
@@ -1837,6 +1857,11 @@ function parseAppRoute(): AppRoute {
   }
   if (pathname === "/catalog") {
     return { name: "catalog" };
+  }
+
+  const stereoVideoMatch = pathname.match(/^\/stereo\/video\/([^/]+)$/);
+  if (stereoVideoMatch?.[1]) {
+    return { name: "stereoVideo", videoId: decodeURIComponent(stereoVideoMatch[1]) };
   }
 
   const videoMatch = pathname.match(/^\/video\/([^/]+)$/);
@@ -1872,6 +1897,9 @@ export default function Root() {
   const [directVideo, setDirectVideo] = useState<CatalogVideo | null>(null);
   const [directVideoLoading, setDirectVideoLoading] = useState(false);
   const catalogLoadedRef = useRef(false);
+  const activeRouteVideoId =
+    route.name === "video" || route.name === "stereoVideo" ? route.videoId : null;
+  const presentationOnly = new URLSearchParams(window.location.search).has("stereoFrame");
 
   useEffect(() => {
     const syncRoute = () => setRoute(parseAppRoute());
@@ -1890,7 +1918,10 @@ export default function Root() {
   }, [route.name]);
 
   useEffect(() => {
-    document.body.style.overflow = route.name === "video" || route.name === "logs" ? "hidden" : "auto";
+    document.body.style.overflow =
+      route.name === "video" || route.name === "stereoVideo" || route.name === "logs"
+        ? "hidden"
+        : "auto";
     return () => {
       document.body.style.overflow = "";
     };
@@ -1918,13 +1949,16 @@ export default function Root() {
   }, [route.name]);
 
   useEffect(() => {
-    if (route.name !== "video") {
+    if (!activeRouteVideoId) {
       setDirectVideo(null);
       setDirectVideoLoading(false);
       return;
     }
 
-    if (route.videoId === FALLBACK_CATALOG_VIDEO.id || videos.some((video) => video.id === route.videoId)) {
+    if (
+      activeRouteVideoId === FALLBACK_CATALOG_VIDEO.id ||
+      videos.some((video) => video.id === activeRouteVideoId)
+    ) {
       setDirectVideo(null);
       setDirectVideoLoading(false);
       return;
@@ -1934,7 +1968,7 @@ export default function Root() {
     setDirectVideo(null);
     setDirectVideoLoading(true);
 
-    getVideo(route.videoId)
+    getVideo(activeRouteVideoId)
       .then((asset) => {
         if (cancelled) return;
         const resolvedVideo = asset ? catalogVideoFromAsset(asset) : null;
@@ -1951,7 +1985,7 @@ export default function Root() {
     return () => {
       cancelled = true;
     };
-  }, [route, videos]);
+  }, [activeRouteVideoId, videos]);
 
   if (route.name === "logs") {
     return <LogsPage />;
@@ -1985,10 +2019,11 @@ export default function Root() {
     );
   }
 
-  const activeVideo =
-    videos.find((video) => video.id === route.videoId) ??
-    directVideo ??
-    (route.videoId === FALLBACK_CATALOG_VIDEO.id ? FALLBACK_CATALOG_VIDEO : null);
+  const activeVideo = activeRouteVideoId
+    ? videos.find((video) => video.id === activeRouteVideoId) ??
+      directVideo ??
+      (activeRouteVideoId === FALLBACK_CATALOG_VIDEO.id ? FALLBACK_CATALOG_VIDEO : null)
+    : null;
 
   if (!activeVideo) {
     return (
@@ -1998,5 +2033,16 @@ export default function Root() {
     );
   }
 
-  return <App key={activeVideo.id} video={activeVideo} onExit={() => navigateTo("/videos")} />;
+  if (route.name === "stereoVideo") {
+    return <StereoViewer video={activeVideo} onExit={() => navigateTo(videoPath(activeVideo.id))} />;
+  }
+
+  return (
+    <App
+      key={activeVideo.id}
+      video={activeVideo}
+      onExit={() => navigateTo("/videos")}
+      presentationOnly={presentationOnly}
+    />
+  );
 }

@@ -1,6 +1,6 @@
-# CineVerse Frontend
+# Vera Frontend
 
-Vercel-hosted frontend for the CineVerse / SceneVerse AI hackathon demo.
+Vercel-hosted frontend for the Vera AI hackathon demo.
 
 The frontend owns the viewer surface from the MVP architecture diagram:
 

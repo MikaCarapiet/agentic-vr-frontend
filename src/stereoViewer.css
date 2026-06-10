@@ -1,0 +1,146 @@
+.stereo-viewer {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #030305;
+  color: #f6f2e9;
+}
+
+.stereo-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  gap: 0;
+  padding: 58px 0 clamp(8px, 1.2vw, 18px);
+  background: #030305;
+}
+
+.stereo-eye {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #050507;
+}
+
+.stereo-eye::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 48%, rgba(0, 0, 0, 0.2) 74%, rgba(0, 0, 0, 0.76)),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.16), transparent 18%, transparent 82%, rgba(0, 0, 0, 0.2));
+}
+
+.stereo-app-frame {
+  position: absolute;
+  width: 124%;
+  height: 124%;
+  top: -12%;
+  left: -12%;
+  border: 0;
+  pointer-events: none;
+  background: #050507;
+}
+
+.stereo-eye-left .stereo-app-frame {
+  transform: translateX(1.2%);
+}
+
+.stereo-eye-right .stereo-app-frame {
+  transform: translateX(-1.2%);
+}
+
+.stereo-controls {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 6;
+  display: flex;
+  gap: 8px;
+  translate: -50% 0;
+}
+
+.stereo-controls button {
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 0 13px;
+  color: rgba(255, 251, 243, 0.88);
+  background: rgba(5, 5, 7, 0.62);
+  backdrop-filter: blur(14px);
+  font-size: 0.72rem;
+}
+
+.stereo-controls button:hover,
+.stereo-controls button:focus-visible {
+  border-color: rgba(245, 197, 110, 0.42);
+  color: #fffaf0;
+}
+
+.stereo-orientation-lock {
+  display: none;
+}
+
+@media (orientation: portrait) and (max-width: 900px) {
+  .stereo-stage,
+  .stereo-controls {
+    display: none;
+  }
+
+  .stereo-orientation-lock {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    padding: 22px;
+    background: #050507;
+  }
+
+  .stereo-orientation-lock div {
+    display: grid;
+    gap: 8px;
+    width: min(320px, 100%);
+    padding: 22px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background: rgba(18, 18, 22, 0.72);
+    text-align: center;
+  }
+
+  .stereo-orientation-lock span {
+    color: rgba(127, 198, 255, 0.86);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .stereo-orientation-lock strong {
+    font-size: 1.2rem;
+  }
+
+  .stereo-orientation-lock p {
+    margin: 0;
+    color: rgba(246, 242, 233, 0.66);
+  }
+}
+
+@media (max-height: 480px) {
+  .stereo-controls {
+    top: 6px;
+  }
+
+  .stereo-controls button {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 0.66rem;
+  }
+
+  .stereo-stage {
+    padding-top: 44px;
+  }
+}

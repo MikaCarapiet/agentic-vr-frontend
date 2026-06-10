@@ -879,7 +879,7 @@ function mockChat(request: ChatRequest): ChatResponse {
     { agent: "Orchestrator", step: "intent classified", status: "done" },
   ];
 
-  if (/(step into|enter|generate|ciniverse|sceneverse|this scene)/.test(text)) {
+  if (/(step into|enter|generate|vera|this scene)/.test(text)) {
     return {
       intent: "scene_generation",
       respondingAgent: "Orchestrator",
@@ -897,7 +897,7 @@ function mockChat(request: ChatRequest): ChatResponse {
     return {
       intent: "video_control",
       action: "pause",
-      respondingAgent: "CineVerse",
+      respondingAgent: "Vera",
       response: "Paused.",
       updatedMemorySummary: "Viewer requested video pause.",
       agentTrace: [...traceBase, { agent: "Video Tool", step: "pause video", status: "done" }],
@@ -908,7 +908,7 @@ function mockChat(request: ChatRequest): ChatResponse {
     return {
       intent: "video_control",
       action: "play",
-      respondingAgent: "CineVerse",
+      respondingAgent: "Vera",
       response: "Continuing.",
       updatedMemorySummary: "Viewer resumed playback.",
       agentTrace: [...traceBase, { agent: "Video Tool", step: "play video", status: "done" }],
@@ -919,7 +919,7 @@ function mockChat(request: ChatRequest): ChatResponse {
     return {
       intent: "video_control",
       action: "rewind",
-      respondingAgent: "CineVerse",
+      respondingAgent: "Vera",
       response: "Rewinding 10 seconds.",
       updatedMemorySummary: "Viewer moved backward in the clip.",
       agentTrace: [...traceBase, { agent: "Video Tool", step: "rewind 10 seconds", status: "done" }],
@@ -930,7 +930,7 @@ function mockChat(request: ChatRequest): ChatResponse {
     return {
       intent: "video_control",
       action: "forward",
-      respondingAgent: "CineVerse",
+      respondingAgent: "Vera",
       response: "Skipping ahead 20 seconds.",
       updatedMemorySummary: "Viewer moved forward in the clip.",
       agentTrace: [...traceBase, { agent: "Video Tool", step: "fast forward 20 seconds", status: "done" }],
@@ -1038,7 +1038,7 @@ function mockChat(request: ChatRequest): ChatResponse {
 
   return {
     intent: "fallback_clarify",
-    respondingAgent: "CineVerse",
+    respondingAgent: "Vera",
     response:
       "I can pause, rewind, fast forward, step into the scene, explain why Yoda’s lightsaber is green, or tell you where to buy the replica.",
     updatedMemorySummary: "Viewer received available command options.",

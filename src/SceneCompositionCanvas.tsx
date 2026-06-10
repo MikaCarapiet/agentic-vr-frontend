@@ -395,36 +395,6 @@ export default function SceneCompositionCanvas({
             }
           }
 
-          // Energy streak flashing along the subject's principal axis.
-          const streakCycle = ((now + subject.streakOffset) % subject.streakPeriod) / subject.streakPeriod;
-          if (streakCycle < 0.2) {
-            const streakProgress = streakCycle / 0.2;
-            const streakEnvelope = Math.sin(streakProgress * Math.PI);
-            const diag = Math.hypot(bboxW, bboxH);
-            const travel = (streakProgress - 0.5) * diag * 0.5;
-            const cos = Math.cos(subject.axisAngle);
-            const sin = Math.sin(subject.axisAngle);
-            const streakGradient = context.createLinearGradient(
-              centerX + cos * (travel - diag * 0.55),
-              centerY + sin * (travel - diag * 0.55),
-              centerX + cos * (travel + diag * 0.55),
-              centerY + sin * (travel + diag * 0.55),
-            );
-            streakGradient.addColorStop(0, rgba(subject.color, 0));
-            streakGradient.addColorStop(0.5, rgba(mixToWhite(subject.color, 0.32), Math.min(1, 1.12 * streakEnvelope * baseAlpha)));
-            streakGradient.addColorStop(1, rgba(subject.color, 0));
-            context.save();
-            context.shadowColor = rgba(subject.color, Math.min(1, streakEnvelope * baseAlpha * 1.2));
-            context.shadowBlur = 26;
-            context.strokeStyle = streakGradient;
-            context.lineWidth = 6.2;
-            context.lineCap = "round";
-            context.beginPath();
-            context.moveTo(centerX + cos * (travel - diag * 0.55), centerY + sin * (travel - diag * 0.55));
-            context.lineTo(centerX + cos * (travel + diag * 0.55), centerY + sin * (travel + diag * 0.55));
-            context.stroke();
-            context.restore();
-          }
         }
       }
 
