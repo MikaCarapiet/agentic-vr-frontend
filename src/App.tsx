@@ -41,6 +41,7 @@ type VoiceState = "idle" | "listening" | "thinking" | "speaking" | "error";
 type HistoryItem = {
   speaker: string;
   text: string;
+  streaming?: boolean;
 };
 
 type ToolEvent = {
@@ -196,6 +197,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
   const veraSessionActiveRef = useRef(false);
   const generationTimerRef = useRef<number | null>(null);
   const responseTimerRef = useRef<number | null>(null);
+  const replyStreamTimerRef = useRef<number | null>(null);
   const voiceRestartTimerRef = useRef<number | null>(null);
   const hudTimerRef = useRef<number | null>(null);
   const hudPinnedRef = useRef(false);
@@ -236,10 +238,6 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
   const visibleHistory = history.slice(-4);
   const centerCaption =
     caption && caption !== "Say “step into this scene”" ? caption : "";
-  const liveTranscript =
-    voiceState === "listening" || voiceState === "thinking"
-      ? heardText || centerCaption || "Listening..."
-      : centerCaption;
   const hudPinned =
     voiceEnabled &&
     (veraSessionActive ||
@@ -292,6 +290,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
       veraSessionActiveRef.current = false;
       if (generationTimerRef.current) window.clearInterval(generationTimerRef.current);
       if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
+      if (replyStreamTimerRef.current) window.clearInterval(replyStreamTimerRef.current);
       if (voiceRestartTimerRef.current) window.clearTimeout(voiceRestartTimerRef.current);
       if (hudTimerRef.current) window.clearTimeout(hudTimerRef.current);
       voiceInputRef.current?.abort?.();
@@ -343,14 +342,16 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
       isWakeInvocation: heardWake?.isWakeInvocation ?? false,
       command: heardWake?.command,
     });
-    setHeardText(heard);
-    setCaption(heard);
-
     if (veraSessionActiveRef.current && heard) {
+      setHeardText(heard);
+      setCaption(heard);
+      upsertStreamingHistory("You", heard);
       return;
     } else if (heardWake?.isWakeInvocation) {
-      setHeardText(formatWakeCaption(heardWake.command));
+      const visibleCommand = heardWake.command || "Hey Vera";
+      setHeardText(visibleCommand);
       setCaption(heardWake.command ? heardWake.command : "Listening...");
+      upsertStreamingHistory("You", visibleCommand);
     }
   }
 
@@ -509,8 +510,30 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
     };
   }, []);
 
+  function upsertStreamingHistory(speaker: string, text: string) {
+    setHistory((items) => {
+      const next = [...items];
+      const latest = next[next.length - 1];
+      if (latest?.speaker === speaker && latest.streaming) {
+        next[next.length - 1] = { ...latest, text, streaming: true };
+      } else {
+        next.push({ speaker, text, streaming: true });
+      }
+      return next.slice(-8);
+    });
+  }
+
   function pushHistory(item: HistoryItem) {
-    setHistory((items) => [...items.slice(-7), item]);
+    setHistory((items) => {
+      const next = [...items];
+      const latest = next[next.length - 1];
+      if (latest?.speaker === item.speaker && latest.streaming) {
+        next[next.length - 1] = { ...item, streaming: false };
+      } else {
+        next.push({ ...item, streaming: false });
+      }
+      return next.slice(-8);
+    });
     logAppEvent({
       category: item.speaker === "You" ? "voice" : "agent",
       label: item.speaker,
@@ -656,13 +679,42 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
   function speakResponse(response: string, speaker: string) {
     const speakerAgentId = resolveAgentIdBySpeaker(speaker);
     if (speakerAgentId) setActiveAgentId(speakerAgentId);
+    if (replyStreamTimerRef.current) {
+      window.clearInterval(replyStreamTimerRef.current);
+      replyStreamTimerRef.current = null;
+    }
     setVoiceState("speaking");
-    setCaption(response);
-    pushHistory({ speaker, text: response });
-    window.setTimeout(() => {
+    setCaption("");
+
+    const trimmedResponse = response.trim();
+    if (!trimmedResponse) {
+      pushHistory({ speaker, text: "" });
       setVoiceState(voiceSupported ? "listening" : "idle");
-      if (mode === "watching") setCaption("");
-    }, 3200);
+      return;
+    }
+
+    const chunkSize = Math.max(3, Math.ceil(trimmedResponse.length / 90));
+    let nextLength = 0;
+    upsertStreamingHistory(speaker, "");
+
+    replyStreamTimerRef.current = window.setInterval(() => {
+      nextLength = Math.min(trimmedResponse.length, nextLength + chunkSize);
+      const partial = trimmedResponse.slice(0, nextLength);
+      setCaption(partial);
+      upsertStreamingHistory(speaker, partial);
+
+      if (nextLength < trimmedResponse.length) return;
+
+      if (replyStreamTimerRef.current) {
+        window.clearInterval(replyStreamTimerRef.current);
+        replyStreamTimerRef.current = null;
+      }
+      pushHistory({ speaker, text: trimmedResponse });
+      window.setTimeout(() => {
+        setVoiceState(voiceSupported ? "listening" : "idle");
+        if (mode === "watching") setCaption("");
+      }, 900);
+    }, 34);
   }
 
   function captureFrame() {
@@ -1219,7 +1271,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
   const latestSpeakerHistoryIndex = visibleHistory.reduce((latestIndex, item, index) => {
     return resolveAgentIdBySpeaker(item.speaker) ? index : latestIndex;
   }, -1);
-  const shouldShowResponseHistory = visibleHistory.length > 0 || Boolean(liveTranscript);
+  const shouldShowResponseHistory = visibleHistory.length > 0;
 
   return (
     <main
@@ -1384,22 +1436,6 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
             </article>
             );
           })}
-          {liveTranscript ? (
-            <article
-              className={layerClass("history-item live-transcript", "live-transcript")}
-              data-layer-id="live-transcript"
-              data-layer-label="Live voice transcript"
-              tabIndex={0}
-              onClick={(event) => {
-                event.stopPropagation();
-                selectLayer("live-transcript");
-              }}
-              onFocus={() => selectLayer("live-transcript")}
-            >
-              <strong>Live transcript</strong>
-              <p>{liveTranscript}</p>
-            </article>
-          ) : null}
         </aside>
       ) : null}
 
