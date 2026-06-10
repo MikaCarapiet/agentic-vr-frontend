@@ -190,6 +190,16 @@ export type CommerceCollectible = {
   recommendedContext: string;
 };
 
+export type CheckoutRequest = {
+  sceneId: string;
+  unlockType?: string;
+};
+
+export type CheckoutResponse = {
+  checkoutUrl: string;
+  mode: "stripe" | "simulated";
+};
+
 export type SpeechSynthesisResult = {
   audioUrl: string;
   revoke: () => void;
@@ -1098,6 +1108,10 @@ export async function findCollectible(
     imageUrl: buildCollectiblePlaceholderImage("Scene collectible"),
     recommendedContext: "Use the Exa research source here once the backend research route is reachable.",
   };
+}
+
+export async function createCheckoutSession(payload: CheckoutRequest): Promise<CheckoutResponse> {
+  return postJsonOrThrow<CheckoutResponse>("/api/checkout", payload, 12000);
 }
 
 export async function synthesizeSpeech(

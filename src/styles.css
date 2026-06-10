@@ -65,6 +65,26 @@ body {
   font-weight: 850;
 }
 
+.route-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.unlock-status.success {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(245, 197, 110, 0.16), transparent 24rem),
+    #050507;
+}
+
+.unlock-session {
+  max-width: min(680px, calc(100vw - 48px));
+  color: rgba(127, 198, 255, 0.66) !important;
+  font-size: 0.68rem !important;
+  overflow-wrap: anywhere;
+}
+
 button,
 input {
   font: inherit;
@@ -1112,6 +1132,43 @@ button {
 
 .cart-empty {
   margin: 0;
+}
+
+.cart-checkout {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 9px;
+}
+
+.cart-checkout span,
+.cart-checkout em {
+  color: rgba(255, 251, 243, 0.58);
+  font-size: 0.62rem;
+  font-style: normal;
+  line-height: 1.3;
+}
+
+.cart-checkout em {
+  color: rgba(255, 134, 150, 0.78);
+}
+
+.cart-checkout button {
+  min-height: 32px;
+  border: 1px solid rgba(245, 197, 110, 0.5);
+  border-radius: 999px;
+  color: #050507;
+  background: linear-gradient(135deg, #f5c56e, #7fc6ff);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cart-checkout button:disabled {
+  cursor: wait;
+  filter: grayscale(0.3);
+  opacity: 0.62;
 }
 
 .commerce-card {
@@ -2271,8 +2328,20 @@ button {
 .stereo-frame .cart-item strong,
 .stereo-frame .cart-item span,
 .stereo-frame .cart-item em,
-.stereo-frame .cart-empty {
+.stereo-frame .cart-empty,
+.stereo-frame .cart-checkout span,
+.stereo-frame .cart-checkout em {
   font-size: 0.52rem;
+}
+
+.stereo-frame .cart-checkout {
+  gap: 6px;
+  padding-top: 7px;
+}
+
+.stereo-frame .cart-checkout button {
+  min-height: 26px;
+  font-size: 0.54rem;
 }
 
 /* ── VR View ──────────────────────────────────────────────────────────────── */

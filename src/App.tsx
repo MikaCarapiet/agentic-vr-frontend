@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   analyzeScene,
   buildCollectiblePlaceholderImage,
+  createCheckoutSession,
   createRealtimeTranscriptionToken,
   downloadVideo,
   findCollectible,
@@ -199,9 +200,10 @@ function normalizeCommerceCartDecision(text: string): "yes" | "no" | null {
   return null;
 }
 
-function matchCartCommand(text: string): "open" | "close" | null {
+function matchCartCommand(text: string): "open" | "close" | "checkout" | null {
   if (/\b(open|show|view)\s+(the\s+|my\s+)?cart\b/i.test(text)) return "open";
   if (/\b(close|hide|dismiss)\s+(the\s+|my\s+)?cart\b/i.test(text)) return "close";
+  if (/\b(checkout|check out|buy now|purchase|pay now)\b/i.test(text)) return "checkout";
   return null;
 }
 
@@ -317,6 +319,8 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   const [commerceCartState, setCommerceCartState] = useState<CommerceCartState>("idle");
   const [cartOpen, setCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [checkoutState, setCheckoutState] = useState<"idle" | "loading" | "error">("idle");
+  const [checkoutError, setCheckoutError] = useState("");
   const [characterRegions, setCharacterRegions] = useState<SceneRegion[]>([]);
   const {
     activeAgent,
@@ -334,6 +338,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const visibleHistory = history.slice(-4);
   const cartItemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
+  const cartUnitCount = cartItems.length;
   const isStereoFrame = stereoRole !== null;
   const centerCaption =
     caption && caption !== "Say “step into this scene”" ? caption : "";
@@ -1278,9 +1283,76 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     setCartOpen(true);
   }
 
+  async function handleCheckout() {
+    if (isMirrorStereo || checkoutState === "loading") return;
+    if (cartItems.length === 0) {
+      setCartOpen(true);
+      showTool({ label: "Cart empty", detail: "add a scene item first" });
+      return;
+    }
+
+    if (!sceneId) {
+      setCheckoutState("error");
+      setCheckoutError("Step into the scene before checkout.");
+      showTool({ label: "Checkout unavailable", detail: "scene not initialized" });
+      speakResponse("Step into the scene first, then checkout will be ready.", "Vera");
+      return;
+    }
+
+    setCheckoutState("loading");
+    setCheckoutError("");
+    showTool({ label: "Stripe Checkout", detail: "creating secure session" });
+    logAppEvent({
+      category: "commerce",
+      label: "Checkout started",
+      detail: `${cartItemCount} item${cartItemCount === 1 ? "" : "s"}`,
+      status: "active",
+      metadata: {
+        sceneId,
+        cartItems: cartItems.map((item) => ({
+          title: item.title,
+          quantity: item.quantity,
+          sourceUrl: item.sourceUrl,
+        })),
+      },
+    });
+
+    try {
+      const checkout = await createCheckoutSession({
+        sceneId,
+        unlockType: "agentic_commerce_cart",
+      });
+      logAppEvent({
+        category: "commerce",
+        label: checkout.mode === "stripe" ? "Stripe Checkout ready" : "Simulated checkout ready",
+        detail: checkout.checkoutUrl,
+        status: "done",
+        metadata: { sceneId, mode: checkout.mode },
+      });
+      window.location.assign(checkout.checkoutUrl);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Could not start checkout.";
+      setCheckoutState("error");
+      setCheckoutError(detail);
+      showTool({ label: "Checkout failed", detail });
+      logAppEvent({
+        category: "commerce",
+        label: "Checkout failed",
+        detail,
+        status: "error",
+        metadata: { sceneId },
+      });
+    }
+  }
+
   function handleCartCommand(utterance: string) {
     const command = matchCartCommand(utterance);
     if (!command) return false;
+
+    if (command === "checkout") {
+      void handleCheckout();
+      return true;
+    }
 
     const nextOpen = command === "open";
     setCartOpen(nextOpen);
@@ -1982,29 +2054,48 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
             </button>
           </header>
           {cartItems.length > 0 ? (
-            <div className="cart-items">
-              {cartItems.map((item) => (
-                <article className="cart-item" key={item.id}>
-                  <img
-                    src={item.imageUrl}
-                    alt=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                    onError={(event) => {
-                      const image = event.currentTarget;
-                      if (image.dataset.fallbackApplied === "true") return;
-                      image.dataset.fallbackApplied = "true";
-                      image.src = buildCollectiblePlaceholderImage(item.title);
-                    }}
-                  />
-                  <div>
-                    <strong>{item.title}</strong>
-                    <span>{item.sourceTitle}</span>
-                    <em>Qty {item.quantity}</em>
-                  </div>
-                </article>
-              ))}
-            </div>
+            <>
+              <div className="cart-items">
+                {cartItems.map((item) => (
+                  <article className="cart-item" key={item.id}>
+                    <img
+                      src={item.imageUrl}
+                      alt=""
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      onError={(event) => {
+                        const image = event.currentTarget;
+                        if (image.dataset.fallbackApplied === "true") return;
+                        image.dataset.fallbackApplied = "true";
+                        image.src = buildCollectiblePlaceholderImage(item.title);
+                      }}
+                    />
+                    <div>
+                      <strong>{item.title}</strong>
+                      <span>{item.sourceTitle}</span>
+                      <em>Qty {item.quantity}</em>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <footer className="cart-checkout">
+                <span>
+                  {cartItemCount} item{cartItemCount === 1 ? "" : "s"} from {cartUnitCount} scene match
+                  {cartUnitCount === 1 ? "" : "es"}
+                </span>
+                <button
+                  type="button"
+                  disabled={checkoutState === "loading" || isMirrorStereo}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleCheckout();
+                  }}
+                >
+                  {checkoutState === "loading" ? "Opening..." : "Checkout"}
+                </button>
+                {checkoutError ? <em>{checkoutError}</em> : null}
+              </footer>
+            </>
           ) : (
             <p className="cart-empty">No scene items added yet.</p>
           )}
@@ -2453,6 +2544,7 @@ type AppRoute =
   | { name: "catalog" }
   | { name: "logs" }
   | { name: "stereoVideo"; videoId: string }
+  | { name: "unlockStatus"; status: "success" | "cancel" }
   | { name: "videos" }
   | { name: "video"; videoId: string };
 
@@ -2468,6 +2560,12 @@ function parseAppRoute(): AppRoute {
   }
   if (pathname === "/catalog") {
     return { name: "catalog" };
+  }
+  if (pathname === "/unlock/success") {
+    return { name: "unlockStatus", status: "success" };
+  }
+  if (pathname === "/unlock/cancel" || pathname === "/unlock/simulated") {
+    return { name: "unlockStatus", status: pathname === "/unlock/cancel" ? "cancel" : "success" };
   }
 
   const stereoVideoMatch = pathname.match(/^\/stereo\/video\/([^/]+)$/);
@@ -2747,6 +2845,29 @@ export default function Root() {
         onOpenCatalog={() => navigateTo("/catalog")}
         onOpenAdmin={() => navigateTo("/admin/videos")}
       />
+    );
+  }
+
+  if (route.name === "unlockStatus") {
+    const searchParams = new URLSearchParams(window.location.search);
+    const sceneParam = searchParams.get("sceneId");
+    const sessionId = searchParams.get("session_id");
+    const success = route.status === "success";
+    return (
+      <main className={`route-loading unlock-status ${success ? "success" : "cancel"}`} aria-live="polite">
+        <span>{success ? "Checkout complete" : "Checkout canceled"}</span>
+        <p>
+          {success
+            ? "Scene commerce is confirmed. You can return to the catalog or continue the demo."
+            : "No payment was completed. Your scene cart can be rebuilt from the movie moment."}
+        </p>
+        {sessionId ? <p className="unlock-session">Session {sessionId}</p> : null}
+        {sceneParam ? <p className="unlock-session">Scene {sceneParam}</p> : null}
+        <div className="route-actions">
+          <button type="button" onClick={() => navigateTo("/catalog")}>Back to catalog</button>
+          <button type="button" onClick={() => navigateTo("/videos")}>Open app</button>
+        </div>
+      </main>
     );
   }
 
