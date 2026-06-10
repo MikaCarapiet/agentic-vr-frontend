@@ -514,6 +514,10 @@ export async function deleteVideo(videoId: string): Promise<DeleteVideoResponse 
   return deleteJson<DeleteVideoResponse>(`/api/admin/videos/${encodeURIComponent(videoId)}`, 10000);
 }
 
+export async function downloadVideo(videoId: string): Promise<VideoAsset | null> {
+  return postJson<VideoAsset>(`/api/admin/videos/${encodeURIComponent(videoId)}/download`, {}, 300_000);
+}
+
 export async function uploadVideo(
   file: File,
   title?: string,

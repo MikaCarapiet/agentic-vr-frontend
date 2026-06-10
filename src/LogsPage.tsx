@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import FullscreenButton from "./FullscreenButton";
 import {
   appLogEventName,
   clearAppLogs,
@@ -77,6 +78,9 @@ export default function LogsPage() {
           <p>Router decisions, agent traces, API fallbacks, voice state, and commerce enrichment.</p>
         </div>
         <div className="logs-actions">
+          <div className="app-nav-group">
+            <FullscreenButton compact />
+          </div>
           <a href="/" className="logs-button">Open app</a>
           <button
             className="logs-button danger"

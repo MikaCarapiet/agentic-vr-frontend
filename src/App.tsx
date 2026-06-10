@@ -28,6 +28,7 @@ import "./styles.css";
 import AdminVideosPage from "./AdminVideosPage";
 import Landing from "./Landing";
 import LogsPage from "./LogsPage";
+import MovieCatalogPage from "./MovieCatalogPage";
 import { SceneExperienceProvider, useSceneExperience } from "./sceneExperienceContext";
 import {
   buildCatalogVideos,
@@ -1785,6 +1786,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
 
 type AppRoute =
   | { name: "adminVideos" }
+  | { name: "catalog" }
   | { name: "logs" }
   | { name: "videos" }
   | { name: "video"; videoId: string };
@@ -1799,6 +1801,9 @@ function parseAppRoute(): AppRoute {
   if (pathname === "/admin/videos") {
     return { name: "adminVideos" };
   }
+  if (pathname === "/catalog") {
+    return { name: "catalog" };
+  }
 
   const videoMatch = pathname.match(/^\/video\/([^/]+)$/);
   if (videoMatch?.[1]) {
@@ -1808,9 +1813,18 @@ function parseAppRoute(): AppRoute {
   return { name: "videos" };
 }
 
+let routeChangeHandler: (() => void) | null = null;
+
+function registerRouteChangeHandler(handler: () => void) {
+  routeChangeHandler = handler;
+  return () => {
+    routeChangeHandler = null;
+  };
+}
+
 function navigateTo(path: string, replace = false) {
   window.history[replace ? "replaceState" : "pushState"]({}, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
+  routeChangeHandler?.();
 }
 
 function videoPath(videoId: string) {
@@ -1826,9 +1840,13 @@ export default function Root() {
   const catalogLoadedRef = useRef(false);
 
   useEffect(() => {
-    const handleRouteChange = () => setRoute(parseAppRoute());
-    window.addEventListener("popstate", handleRouteChange);
-    return () => window.removeEventListener("popstate", handleRouteChange);
+    const syncRoute = () => setRoute(parseAppRoute());
+    const unregisterRouteHandler = registerRouteChangeHandler(syncRoute);
+    window.addEventListener("popstate", syncRoute);
+    return () => {
+      unregisterRouteHandler();
+      window.removeEventListener("popstate", syncRoute);
+    };
   }, []);
 
   useEffect(() => {
@@ -1851,7 +1869,7 @@ export default function Root() {
     let cancelled = false;
     setCatalogLoading(true);
 
-    listVideos(24)
+    listVideos(100)
       .then((response) => {
         if (cancelled) return;
         setVideos(buildCatalogVideos(response?.items ?? []));
@@ -1909,13 +1927,26 @@ export default function Root() {
     return <AdminVideosPage onOpenVideo={(videoId) => navigateTo(videoPath(videoId))} />;
   }
 
+  if (route.name === "catalog") {
+    return (
+      <MovieCatalogPage
+        videos={videos}
+        isLoading={catalogLoading}
+        onOpenVideo={(videoId) => navigateTo(videoPath(videoId))}
+        onGoHome={() => navigateTo("/videos")}
+        onOpenAdmin={() => navigateTo("/admin/videos")}
+      />
+    );
+  }
+
   if (route.name === "videos") {
     return (
       <Landing
         videos={videos}
         isLoading={catalogLoading}
         onOpenVideo={(videoId) => navigateTo(videoPath(videoId))}
-        onOpenMovieCatalog={() => navigateTo("/admin/videos")}
+        onOpenCatalog={() => navigateTo("/catalog")}
+        onOpenAdmin={() => navigateTo("/admin/videos")}
       />
     );
   }

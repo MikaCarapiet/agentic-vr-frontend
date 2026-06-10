@@ -1,5 +1,7 @@
 import { resolveBackendAssetUrl, type VideoAsset } from "./sceneverseApi";
 
+export type CatalogVideoSourceKind = "interactive" | "linked" | "demo";
+
 export type CatalogVideo = {
   id: string;
   title: string;
@@ -11,6 +13,7 @@ export type CatalogVideo = {
   agents: string[];
   playbackUrl: string;
   sourceLabel: string;
+  sourceKind: CatalogVideoSourceKind;
   thumbnailUrl?: string;
   externalUrl?: string;
   playerPlayable: boolean;
@@ -28,6 +31,7 @@ export const FALLBACK_CATALOG_VIDEO: CatalogVideo = {
   agents: ["Yoda", "Vader", "Director"],
   playbackUrl: "/demo-duel.mp4",
   sourceLabel: "Bundled demo",
+  sourceKind: "demo",
   playerPlayable: true,
 };
 
@@ -124,6 +128,7 @@ export function catalogVideoFromAsset(asset: VideoAsset): CatalogVideo | null {
     sourceLabel,
     thumbnailUrl: thumbnailOverride ?? getYouTubeThumbnailUrl(asset.originalUrl) ?? getYouTubeThumbnailUrl(asset.playbackUrl),
     externalUrl: playerPlayable ? undefined : resolvedSourceUrl,
+    sourceKind: playerPlayable ? "interactive" : "linked",
     playerPlayable,
   };
 }
@@ -138,5 +143,5 @@ export function buildCatalogVideos(assets: VideoAsset[]): CatalogVideo[] {
     return [video];
   });
 
-  return [FALLBACK_CATALOG_VIDEO, ...backendVideos].slice(0, 8);
+  return [FALLBACK_CATALOG_VIDEO, ...backendVideos];
 }

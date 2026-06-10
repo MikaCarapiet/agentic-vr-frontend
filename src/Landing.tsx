@@ -1,24 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
+import TopNavActions from "./TopNavActions";
 import { FALLBACK_CATALOG_VIDEO, type CatalogVideo } from "./videoCatalog";
+import { useVideoThumbnail } from "./useVideoThumbnail";
 import "./landing.css";
 
 type Props = {
   videos: CatalogVideo[];
   isLoading?: boolean;
   onOpenVideo: (videoId: string) => void;
-  onOpenMovieCatalog: () => void;
+  onOpenCatalog: () => void;
+  onOpenAdmin: () => void;
 };
 
 const CAROUSEL_INTERVAL_MS = 4000;
-
-type FullscreenDocument = Document & {
-  webkitFullscreenElement?: Element | null;
-  webkitExitFullscreen?: () => Promise<void> | void;
-};
-
-type FullscreenElement = HTMLElement & {
-  webkitRequestFullscreen?: () => Promise<void> | void;
-};
 
 function randomVideoIndex(_total: number) {
   return 0;
@@ -41,59 +35,9 @@ function getHeroTitleFitClass(title: string) {
   return "";
 }
 
-function useVideoThumbnail(src: string, seekTime = 1.5) {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let disposed = false;
-    setDataUrl(null);
-    if (!src) return;
-
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.muted = true;
-    video.playsInline = true;
-    video.crossOrigin = "anonymous";
-
-    video.addEventListener("loadedmetadata", () => {
-      video.currentTime = Math.min(seekTime, video.duration * 0.1);
-    });
-
-    video.addEventListener("seeked", () => {
-      if (disposed) return;
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth || 1280;
-      canvas.height = video.videoHeight || 720;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        try {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          setDataUrl(canvas.toDataURL("image/jpeg", 0.86));
-        } catch {
-          setDataUrl(null);
-        }
-      }
-    });
-
-    video.addEventListener("error", () => {
-      if (!disposed) setDataUrl(null);
-    });
-
-    video.src = src;
-    return () => {
-      disposed = true;
-      video.removeAttribute("src");
-      video.load();
-    };
-  }, [src, seekTime]);
-
-  return dataUrl;
-}
-
-export default function Landing({ videos, isLoading = false, onOpenVideo, onOpenMovieCatalog }: Props) {
+export default function Landing({ videos, isLoading = false, onOpenVideo, onOpenCatalog, onOpenAdmin }: Props) {
   const carouselVideos = videos.length ? videos : [FALLBACK_CATALOG_VIDEO];
   const [featuredIndex, setFeaturedIndex] = useState(() => randomVideoIndex(carouselVideos.length));
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const featuredVideo = carouselVideos[featuredIndex] ?? carouselVideos[0];
   const visibleCarouselVideos = useMemo(
     () => rotateVideos(carouselVideos, featuredIndex).slice(0, Math.min(4, carouselVideos.length)),
@@ -118,21 +62,6 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
     return () => window.clearTimeout(timeoutId);
   }, [carouselVideos.length, featuredIndex]);
 
-  useEffect(() => {
-    function syncFullscreenState() {
-      const fullscreenDocument = document as FullscreenDocument;
-      setIsFullscreen(Boolean(document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement));
-    }
-
-    syncFullscreenState();
-    document.addEventListener("fullscreenchange", syncFullscreenState);
-    document.addEventListener("webkitfullscreenchange", syncFullscreenState);
-    return () => {
-      document.removeEventListener("fullscreenchange", syncFullscreenState);
-      document.removeEventListener("webkitfullscreenchange", syncFullscreenState);
-    };
-  }, []);
-
   function openFeaturedVideo() {
     openCatalogVideo(featuredVideo);
   }
@@ -145,11 +74,6 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
   function previewCardFromKeyboard(event: React.KeyboardEvent<HTMLElement>, videoId: string) {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    featureVideo(videoId);
-  }
-
-  function previewVideoFromCard(event: React.MouseEvent<HTMLButtonElement>, videoId: string) {
-    event.stopPropagation();
     featureVideo(videoId);
   }
 
@@ -169,30 +93,6 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
     openCatalogVideo(video);
   }
 
-  async function toggleFullscreen() {
-    const fullscreenDocument = document as FullscreenDocument;
-    const root = document.documentElement as FullscreenElement;
-
-    try {
-      if (document.fullscreenElement || fullscreenDocument.webkitFullscreenElement) {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else {
-          await fullscreenDocument.webkitExitFullscreen?.();
-        }
-        return;
-      }
-
-      if (root.requestFullscreen) {
-        await root.requestFullscreen({ navigationUI: "hide" });
-      } else {
-        await root.webkitRequestFullscreen?.();
-      }
-    } catch {
-      setIsFullscreen(Boolean(document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement));
-    }
-  }
-
   return (
     <div className="landing">
       <nav className="lnd-nav" aria-label="CineVerse navigation">
@@ -200,21 +100,7 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
           <span className="lnd-logo-mark" aria-hidden="true" />
           <strong>CineVerse</strong>
         </div>
-        <div className="lnd-nav-actions">
-          <button className="lnd-nav-catalog" onClick={onOpenMovieCatalog}>
-            Movie Catalog
-          </button>
-          <button
-            className={`lnd-fullscreen-button${isFullscreen ? " active" : ""}`}
-            type="button"
-            onClick={toggleFullscreen}
-            aria-pressed={isFullscreen}
-            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-          >
-            <span className="lnd-fullscreen-icon" aria-hidden="true" />
-            <span>{isFullscreen ? "Exit" : "Fullscreen"}</span>
-          </button>
-        </div>
+        <TopNavActions onBrowseAll={onOpenCatalog} onOpenAdmin={onOpenAdmin} />
       </nav>
 
       <main>
@@ -247,7 +133,7 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
 
             <div className="lnd-hero-cta">
               <button className="lnd-btn-primary" onClick={openFeaturedVideo}>
-                {featuredVideo.playerPlayable ? "Watch now" : "Open source"}
+                Watch
               </button>
             </div>
 
@@ -276,11 +162,12 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
         <section className="lnd-section lnd-catalog" id="scene-catalog" aria-labelledby="catalog-title">
           <div className="lnd-section-header">
             <h2 id="catalog-title">Growing Universes</h2>
-            {isLoading ? (
-              <div className="lnd-section-actions">
-                <span className="lnd-loading-pill">Syncing backend</span>
-              </div>
-            ) : null}
+            <div className="lnd-section-actions">
+              {isLoading ? <span className="lnd-loading-pill">Syncing backend</span> : null}
+              <button className="lnd-view-all" type="button" onClick={onOpenCatalog}>
+                View all
+              </button>
+            </div>
           </div>
 
           <div className="lnd-universe-row" key={`row-${featuredVideo.id}`}>
@@ -303,9 +190,9 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
                   <button
                     className="lnd-card-watch"
                     onClick={openFeaturedVideo}
-                    aria-label={`${featuredVideo.playerPlayable ? "Watch" : "Open"} ${featuredVideo.title}`}
+                    aria-label={`Watch ${featuredVideo.title}`}
                   >
-                    {featuredVideo.playerPlayable ? "Watch" : "Open"}
+                    Watch
                   </button>
                 </div>
               </div>
@@ -333,18 +220,11 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
                   </div>
                   <div className="lnd-card-actions">
                     <button
-                      className="lnd-card-preview"
-                      onClick={(event) => previewVideoFromCard(event, item.id)}
-                      aria-label={`Preview ${item.title}`}
-                    >
-                      Preview
-                    </button>
-                    <button
                       className="lnd-card-watch"
                       onClick={(event) => openCatalogVideoFromCard(event, item)}
-                      aria-label={`${item.playerPlayable ? "Watch" : "Open"} ${item.title}`}
+                      aria-label={`Watch ${item.title}`}
                     >
-                      {item.playerPlayable ? "Watch" : "Open"}
+                      Watch
                     </button>
                   </div>
                 </div>
@@ -359,7 +239,7 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
                 </div>
                 <div className="lnd-universe-metric">
                   <strong>+</strong>
-                  <span>add from admin</span>
+                  <span>add from settings</span>
                 </div>
               </article>
             ) : null}

@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
+import FullscreenButton from "./FullscreenButton";
 import {
   createVideoLink,
   deleteVideo,
+  downloadVideo,
   getDatabaseHealth,
   listVideos,
   resolveBackendAssetUrl,
@@ -556,6 +558,19 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
     setMessage(`Uploaded thumbnail for ${updated.videoId}.`);
   }
 
+  async function handleDownload(video: VideoAsset) {
+    setBusyId(video.videoId);
+    setMessage(`Downloading ${video.title || video.videoId}… this may take a minute.`);
+    const updated = await downloadVideo(video.videoId);
+    setBusyId(null);
+    if (!updated) {
+      setMessage(`Download failed for ${video.videoId}.`);
+      return;
+    }
+    setVideos((current) => current.map((v) => (v.videoId === updated.videoId ? updated : v)));
+    setMessage(`Downloaded and stored ${updated.title || updated.videoId}.`);
+  }
+
   async function handleDelete(video: VideoAsset) {
     const label = video.title || video.originalFilename || video.videoId;
     if (!window.confirm(`Delete ${label} from the catalogue? This removes the DB record, not stored media files.`)) {
@@ -584,9 +599,10 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
       <header className="admin-header">
         <div className="admin-header-copy">
           <div className="admin-navline">
-            <a className="admin-back" href="/videos">Public catalogue</a>
-            <span className="admin-kicker">Catalogue Ops</span>
-            <span className="admin-live-pill">{isLoading ? "Syncing backend" : "Catalogue live"}</span>
+            <a className="app-nav-btn" href="/videos">
+              Back
+            </a>
+            <FullscreenButton compact />
           </div>
           <h1>Video Admin</h1>
           <p>
@@ -926,9 +942,20 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
                         >
                           Preview
                         </button>
-                        <button onClick={() => onOpenVideo(video.videoId)} disabled={!canOpenInPlayer(video)}>
-                          Open
-                        </button>
+                        {!video.playbackUrl && (video.sourceType === "youtube" || video.sourceType === "external_url") ? (
+                          <button
+                            className="download"
+                            onClick={() => handleDownload(video)}
+                            disabled={rowBusy}
+                            title="Download video to server storage so it plays in the app"
+                          >
+                            {rowBusy ? "Downloading…" : "Download"}
+                          </button>
+                        ) : (
+                          <button onClick={() => onOpenVideo(video.videoId)} disabled={!canOpenInPlayer(video)}>
+                            Open
+                          </button>
+                        )}
                         <button className="danger" onClick={() => handleDelete(video)} disabled={rowBusy}>
                           Delete
                         </button>

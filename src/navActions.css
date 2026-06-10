@@ -1,0 +1,100 @@
+.app-nav-actions {
+  display: flex;
+  align-items: center;
+}
+
+.app-nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+a.app-nav-btn {
+  text-decoration: none;
+}
+
+.app-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  background: #0a1628;
+  color: #cbd5e1;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.app-nav-btn:hover,
+.app-nav-btn:focus-visible {
+  color: #f8fafc;
+  border-color: rgba(120, 216, 255, 0.35);
+  background: #0f1f35;
+}
+
+.app-nav-btn:focus-visible {
+  outline: 2px solid rgba(120, 216, 255, 0.45);
+  outline-offset: 2px;
+}
+
+.app-nav-btn.is-active {
+  color: #a8e8ff;
+  border-color: #3a8fb8;
+  background: #0f2438;
+  cursor: default;
+}
+
+.app-nav-btn.is-active:hover {
+  color: #a8e8ff;
+  border-color: #3a8fb8;
+  background: #0f2438;
+}
+
+.app-nav-btn--icon {
+  min-width: 30px;
+  padding: 0 9px;
+}
+
+.app-nav-btn--icon.is-active {
+  color: #a8e8ff;
+  border-color: #3a8fb8;
+  background: #0f2438;
+  cursor: pointer;
+}
+
+.app-nav-btn--live {
+  color: #9ee78e;
+  border-color: rgba(158, 231, 142, 0.4);
+  background: rgba(158, 231, 142, 0.1);
+  cursor: default;
+}
+
+.app-nav-btn--live.is-syncing {
+  color: #f0c040;
+  border-color: rgba(240, 192, 64, 0.4);
+  background: rgba(240, 192, 64, 0.1);
+}
+
+.app-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.app-nav-icon svg {
+  display: block;
+}
