@@ -991,6 +991,50 @@ button {
   font-size: 0.76rem;
 }
 
+.stereo-button {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(246, 242, 233, 0.88);
+}
+
+.stereo-button:hover,
+.stereo-button:focus-visible {
+  border-color: rgba(245, 197, 110, 0.34);
+  background: rgba(245, 197, 110, 0.1);
+}
+
+.stereo-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 16px;
+  height: 10px;
+}
+
+.stereo-icon span {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.stereo-icon::before {
+  position: absolute;
+  inset: 4px 6px auto;
+  height: 1.5px;
+  content: "";
+  background: currentColor;
+  border-radius: 999px;
+}
+
 .timeline {
   --progress: 0%;
   appearance: none;
