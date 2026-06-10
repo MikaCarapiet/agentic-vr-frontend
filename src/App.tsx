@@ -1587,6 +1587,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
           data-layer-label="Scene video"
           aria-label={sceneVideo.title}
           src={sceneVideo.playbackUrl}
+          crossOrigin="anonymous"
           playsInline
           preload="metadata"
           onClick={() => selectLayer("scene-video")}
