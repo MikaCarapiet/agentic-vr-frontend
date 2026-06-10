@@ -24,6 +24,13 @@ function rotateVideos(videos: CatalogVideo[], startIndex: number) {
   return [...videos.slice(startIndex), ...videos.slice(0, startIndex)];
 }
 
+function getHeroTitleFitClass(title: string) {
+  const length = title.trim().length;
+  if (length >= 56) return "is-condensed";
+  if (length >= 40) return "is-compact";
+  return "";
+}
+
 function useVideoThumbnail(src: string, seekTime = 1.5) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
@@ -82,6 +89,7 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
     [carouselVideos, featuredIndex],
   );
   const secondaryVideos = visibleCarouselVideos.filter((video) => video.id !== featuredVideo.id).slice(0, 3);
+  const heroTitleFitClass = getHeroTitleFitClass(featuredVideo.title);
   const videoThumbnail = useVideoThumbnail(featuredVideo.thumbnailUrl ? "" : featuredVideo.playbackUrl, 2);
   const thumbnail = featuredVideo.thumbnailUrl ?? videoThumbnail;
 
@@ -177,7 +185,7 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
 
           <div className="lnd-hero-content" key={`copy-${featuredVideo.id}`}>
             <span className="lnd-badge">{featuredVideo.badge}</span>
-            <h1 id="landing-title" className="lnd-hero-title">
+            <h1 id="landing-title" className={["lnd-hero-title", heroTitleFitClass].filter(Boolean).join(" ")}>
               {featuredVideo.title}
             </h1>
             <p className="lnd-hero-tagline">{featuredVideo.tagline}</p>

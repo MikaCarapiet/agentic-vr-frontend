@@ -7,6 +7,7 @@ import {
   resolveBackendAssetUrl,
   updateVideo,
   uploadVideo,
+  uploadVideoThumbnail,
   type DatabaseHealthResponse,
   type VideoAsset,
 } from "./sceneverseApi";
@@ -19,6 +20,7 @@ type Props = {
 type VideoDraft = {
   title: string;
   description: string;
+  thumbnailUrl: string;
   status: string;
 };
 
@@ -60,6 +62,7 @@ function draftFromVideo(video: VideoAsset): VideoDraft {
   return {
     title: video.title ?? "",
     description: video.description ?? "",
+    thumbnailUrl: video.thumbnailUrl ?? "",
     status: video.status,
   };
 }
@@ -123,6 +126,10 @@ function getSourceLines(video: VideoAsset) {
   }
 
   return lines;
+}
+
+function getThumbnailPreviewUrl(value: string | null | undefined) {
+  return resolveBackendAssetUrl(value?.trim()) ?? null;
 }
 
 function getDatabaseContext(dbHealth: DatabaseHealthResponse | null) {
@@ -338,11 +345,16 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
   const [message, setMessage] = useState("Loading backend video catalogue...");
   const [linkTitle, setLinkTitle] = useState("");
   const [linkDescription, setLinkDescription] = useState("");
+  const [linkThumbnailUrl, setLinkThumbnailUrl] = useState("");
+  const [linkThumbnailFile, setLinkThumbnailFile] = useState<File | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkSourceType, setLinkSourceType] = useState<"youtube" | "external_url">("external_url");
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadDescription, setUploadDescription] = useState("");
+  const [uploadThumbnailUrl, setUploadThumbnailUrl] = useState("");
+  const [uploadThumbnailFile, setUploadThumbnailFile] = useState<File | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [thumbnailFiles, setThumbnailFiles] = useState<Record<string, File | null>>({});
   const [previewVideo, setPreviewVideo] = useState<VideoAsset | null>(null);
   const [dbHealth, setDbHealth] = useState<DatabaseHealthResponse | null>(null);
 
@@ -408,8 +420,13 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
     }));
   }
 
+  function updateThumbnailFile(videoId: string, file: File | null) {
+    setThumbnailFiles((current) => ({ ...current, [videoId]: file }));
+  }
+
   async function handleCreateLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     if (!linkUrl.trim()) {
       setMessage("Add a URL before creating a linked video.");
       return;
@@ -426,19 +443,31 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
       url: linkUrl.trim(),
       title: linkTitle.trim() || undefined,
       description: linkDescription.trim() || undefined,
+      thumbnailUrl: linkThumbnailUrl.trim() || undefined,
       sourceType: linkSourceType,
     });
-    setBusyId(null);
     if (!created) {
+      setBusyId(null);
       setMessage("Could not create linked video.");
+      return;
+    }
+
+    const savedVideo = linkThumbnailFile ? await uploadVideoThumbnail(created.videoId, linkThumbnailFile) : created;
+    setBusyId(null);
+    if (!savedVideo) {
+      upsertVideo(created);
+      setMessage(`Created ${getVideoTitle(created)}, but thumbnail upload failed.`);
       return;
     }
 
     setLinkTitle("");
     setLinkDescription("");
+    setLinkThumbnailUrl("");
+    setLinkThumbnailFile(null);
     setLinkUrl("");
-    upsertVideo(created);
-    const successMessage = `Created ${getVideoTitle(created)}.`;
+    form.reset();
+    upsertVideo(savedVideo);
+    const successMessage = `Created ${getVideoTitle(savedVideo)}.`;
     setMessage(successMessage);
     void refreshVideos(successMessage, {
       keepExistingOnFailure: true,
@@ -448,6 +477,7 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
 
   async function handleUpload(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     if (!uploadFile) {
       setMessage("Choose a video file before uploading.");
       return;
@@ -460,7 +490,7 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
 
     setBusyId("upload");
     setMessage(`Uploading ${uploadFile.name}...`);
-    const uploaded = await uploadVideo(uploadFile, uploadTitle, uploadDescription);
+    const uploaded = await uploadVideo(uploadFile, uploadTitle, uploadDescription, uploadThumbnailUrl, uploadThumbnailFile);
     setBusyId(null);
     if (!uploaded) {
       setMessage("Could not upload video.");
@@ -469,8 +499,10 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
 
     setUploadTitle("");
     setUploadDescription("");
+    setUploadThumbnailUrl("");
+    setUploadThumbnailFile(null);
     setUploadFile(null);
-    event.currentTarget.reset();
+    form.reset();
     upsertVideo(uploaded);
     const successMessage = `Uploaded ${getVideoTitle(uploaded)}.`;
     setMessage(successMessage);
@@ -488,6 +520,7 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
     const updated = await updateVideo(video.videoId, {
       title: draft.title,
       description: draft.description,
+      thumbnailUrl: draft.thumbnailUrl,
       status: draft.status,
     });
     setBusyId(null);
@@ -499,6 +532,28 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
     setVideos((current) => current.map((item) => (item.videoId === updated.videoId ? updated : item)));
     setDrafts((current) => ({ ...current, [updated.videoId]: draftFromVideo(updated) }));
     setMessage(`Updated ${updated.videoId}.`);
+  }
+
+  async function handleThumbnailUpload(video: VideoAsset) {
+    const file = thumbnailFiles[video.videoId];
+    if (!file) {
+      setMessage(`Choose a thumbnail image for ${video.videoId}.`);
+      return;
+    }
+
+    setBusyId(`thumbnail-${video.videoId}`);
+    setMessage(`Uploading thumbnail for ${getVideoTitle(video)}...`);
+    const updated = await uploadVideoThumbnail(video.videoId, file);
+    setBusyId(null);
+    if (!updated) {
+      setMessage(`Could not upload thumbnail for ${video.videoId}.`);
+      return;
+    }
+
+    setVideos((current) => current.map((item) => (item.videoId === updated.videoId ? updated : item)));
+    setDrafts((current) => ({ ...current, [updated.videoId]: draftFromVideo(updated) }));
+    setThumbnailFiles((current) => ({ ...current, [updated.videoId]: null }));
+    setMessage(`Uploaded thumbnail for ${updated.videoId}.`);
   }
 
   async function handleDelete(video: VideoAsset) {
@@ -610,6 +665,23 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
               required
             />
           </label>
+          <label>
+            Thumbnail override URL
+            <input
+              value={linkThumbnailUrl}
+              onChange={(event) => setLinkThumbnailUrl(event.target.value)}
+              placeholder="https://.../thumbnail.jpg"
+            />
+          </label>
+          <label className="admin-file-field">
+            Thumbnail image file
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => setLinkThumbnailFile(event.currentTarget.files?.[0] ?? null)}
+            />
+            <small>{linkThumbnailFile ? linkThumbnailFile.name : "JPG, PNG, or WebP. File wins over URL."}</small>
+          </label>
           <label className="admin-description-field">
             Description
             <textarea
@@ -655,6 +727,23 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
               rows={3}
             />
           </label>
+          <label>
+            Thumbnail override URL
+            <input
+              value={uploadThumbnailUrl}
+              onChange={(event) => setUploadThumbnailUrl(event.target.value)}
+              placeholder="https://.../thumbnail.jpg"
+            />
+          </label>
+          <label className="admin-file-field">
+            Thumbnail image file
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => setUploadThumbnailFile(event.currentTarget.files?.[0] ?? null)}
+            />
+            <small>{uploadThumbnailFile ? uploadThumbnailFile.name : "JPG, PNG, or WebP. File wins over URL."}</small>
+          </label>
           <button className="admin-primary-button" type="submit" disabled={busyId === "upload"}>
             {busyId === "upload" ? "Uploading..." : "Upload video"}
           </button>
@@ -686,11 +775,13 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
               {videos.map((video) => {
                 const draft = drafts[video.videoId] ?? draftFromVideo(video);
                 const rowBusy = busyId === video.videoId;
+                const thumbnailBusy = busyId === `thumbnail-${video.videoId}`;
                 const previewAvailable = canPreviewVideo(video);
                 const mediaIssue = getMediaIssue(video);
                 const mediaIssueDetail = getMediaIssueDetail(video);
                 const duplicateIssue = getDuplicateIssue(videos, video);
                 const sourceLines = getSourceLines(video);
+                const thumbnailPreviewUrl = getThumbnailPreviewUrl(draft.thumbnailUrl);
                 return (
                   <tr key={video.videoId}>
                     <td>
@@ -730,6 +821,46 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
                             rows={3}
                           />
                         </label>
+                        <label className="admin-row-field">
+                          <span>Thumbnail URL</span>
+                          <input
+                            aria-label={`Thumbnail URL for ${video.videoId}`}
+                            value={draft.thumbnailUrl}
+                            onChange={(event) => updateDraft(video.videoId, { thumbnailUrl: event.target.value })}
+                            placeholder="Optional poster image URL"
+                          />
+                        </label>
+                        <label className="admin-row-field admin-thumbnail-file-field">
+                          <span>Thumbnail File</span>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            aria-label={`Thumbnail file for ${video.videoId}`}
+                            onChange={(event) => updateThumbnailFile(video.videoId, event.currentTarget.files?.[0] ?? null)}
+                          />
+                          <small>
+                            {thumbnailFiles[video.videoId]?.name ?? "Upload a JPG, PNG, or WebP override"}
+                          </small>
+                        </label>
+                        <button
+                          className="admin-thumbnail-upload-button"
+                          type="button"
+                          onClick={() => handleThumbnailUpload(video)}
+                          disabled={thumbnailBusy || !thumbnailFiles[video.videoId]}
+                        >
+                          {thumbnailBusy ? "Uploading thumbnail..." : "Upload thumbnail file"}
+                        </button>
+                        {thumbnailPreviewUrl ? (
+                          <a
+                            className="admin-thumbnail-preview"
+                            href={thumbnailPreviewUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Open thumbnail"
+                          >
+                            <img src={thumbnailPreviewUrl} alt={`Thumbnail for ${getVideoTitle(video)}`} />
+                          </a>
+                        ) : null}
                         <label className="admin-row-field admin-status-select">
                           <span>Status</span>
                           <select

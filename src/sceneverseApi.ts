@@ -184,6 +184,7 @@ export type VideoAsset = {
   sourceType: "upload" | "youtube" | "external_url";
   title: string | null;
   description: string | null;
+  thumbnailUrl: string | null;
   originalUrl: string | null;
   originalFilename: string | null;
   storageBackend: string | null;
@@ -220,12 +221,14 @@ export type CreateVideoLinkPayload = {
   url: string;
   title?: string;
   description?: string;
+  thumbnailUrl?: string;
   sourceType: "youtube" | "external_url";
 };
 
 export type UpdateVideoPayload = {
   title?: string | null;
   description?: string | null;
+  thumbnailUrl?: string | null;
   status?: string;
 };
 
@@ -511,7 +514,13 @@ export async function deleteVideo(videoId: string): Promise<DeleteVideoResponse 
   return deleteJson<DeleteVideoResponse>(`/api/admin/videos/${encodeURIComponent(videoId)}`, 10000);
 }
 
-export async function uploadVideo(file: File, title?: string, description?: string): Promise<VideoAsset | null> {
+export async function uploadVideo(
+  file: File,
+  title?: string,
+  description?: string,
+  thumbnailUrl?: string,
+  thumbnailFile?: File | null,
+): Promise<VideoAsset | null> {
   if (!apiBaseUrl) return null;
 
   const controller = new AbortController();
@@ -520,6 +529,8 @@ export async function uploadVideo(file: File, title?: string, description?: stri
   formData.append("file", file);
   if (title?.trim()) formData.append("title", title.trim());
   if (description?.trim()) formData.append("description", description.trim());
+  if (thumbnailUrl?.trim()) formData.append("thumbnailUrl", thumbnailUrl.trim());
+  if (thumbnailFile) formData.append("thumbnailFile", thumbnailFile);
   const path = "/api/videos/upload";
   const url = `${apiBaseUrl}${path}`;
 
@@ -564,6 +575,65 @@ export async function uploadVideo(file: File, title?: string, description?: stri
       category: "api",
       label: `POST ${path}`,
       detail: error instanceof DOMException && error.name === "AbortError" ? "upload timed out" : "upload failed",
+      status: "fallback",
+    });
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function uploadVideoThumbnail(videoId: string, file: File): Promise<VideoAsset | null> {
+  if (!apiBaseUrl) return null;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 60000);
+  const formData = new FormData();
+  formData.append("file", file);
+  const path = `/api/admin/videos/${encodeURIComponent(videoId)}/thumbnail`;
+  const url = `${apiBaseUrl}${path}`;
+
+  try {
+    logVeraDebug("api request", { path, url, timeoutMs: 60000 });
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: "thumbnail upload started",
+      status: "active",
+    });
+    const response = await fetch(url, {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+    logVeraDebug("api response", { path, status: response.status, ok: response.ok });
+
+    if (!response.ok) {
+      logAppEvent({
+        category: "api",
+        label: `POST ${path}`,
+        detail: `HTTP ${response.status}`,
+        status: "fallback",
+      });
+      return null;
+    }
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: "thumbnail upload complete",
+      status: "done",
+    });
+    return (await response.json()) as VideoAsset;
+  } catch (error) {
+    logVeraDebug("api error", {
+      path,
+      name: error instanceof Error ? error.name : "unknown",
+      message: error instanceof Error ? error.message : String(error),
+    });
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: error instanceof DOMException && error.name === "AbortError" ? "request timed out" : "request failed",
       status: "fallback",
     });
     return null;

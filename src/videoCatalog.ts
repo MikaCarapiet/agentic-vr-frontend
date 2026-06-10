@@ -105,6 +105,8 @@ export function catalogVideoFromAsset(asset: VideoAsset): CatalogVideo | null {
         ? "YouTube"
         : "External video";
 
+  const thumbnailOverride = resolveBackendAssetUrl(asset.thumbnailUrl) ?? undefined;
+
   return {
     id: asset.videoId,
     title,
@@ -120,7 +122,7 @@ export function catalogVideoFromAsset(asset: VideoAsset): CatalogVideo | null {
     agents: ["Vera", "Director", "Scene agent"],
     playbackUrl: playerPlayable ? resolvedSourceUrl : FALLBACK_CATALOG_VIDEO.playbackUrl,
     sourceLabel,
-    thumbnailUrl: getYouTubeThumbnailUrl(asset.originalUrl) ?? getYouTubeThumbnailUrl(asset.playbackUrl),
+    thumbnailUrl: thumbnailOverride ?? getYouTubeThumbnailUrl(asset.originalUrl) ?? getYouTubeThumbnailUrl(asset.playbackUrl),
     externalUrl: playerPlayable ? undefined : resolvedSourceUrl,
     playerPlayable,
   };

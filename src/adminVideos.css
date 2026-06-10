@@ -743,6 +743,51 @@
   gap: 10px;
 }
 
+.admin-thumbnail-preview {
+  display: block;
+  width: 144px;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(127, 198, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(5, 5, 7, 0.54);
+}
+
+.admin-thumbnail-preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.admin-thumbnail-file-field input {
+  padding: 6px;
+}
+
+.admin-thumbnail-file-field small {
+  color: var(--dim);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.admin-thumbnail-upload-button {
+  justify-self: start;
+  min-height: 30px;
+  border: 1px solid rgba(127, 198, 255, 0.22);
+  border-radius: 999px;
+  padding: 0 11px;
+  color: rgba(127, 198, 255, 0.95);
+  background: rgba(127, 198, 255, 0.07);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.admin-thumbnail-upload-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .admin-row-field {
   display: grid;
   gap: 6px;
