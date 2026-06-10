@@ -36,41 +36,11 @@
   font: inherit;
 }
 
-.cat-logo-mark {
-  position: relative;
+.cat-brand-logo {
   display: block;
-  width: 18px;
-  height: 28px;
-}
-
-.cat-logo-mark::before,
-.cat-logo-mark::after {
-  position: absolute;
-  content: "";
-  border-radius: 999px;
-}
-
-.cat-logo-mark::before {
-  inset: 1px 7px 1px 6px;
-  background: linear-gradient(180deg, #78d8ff, #f0c040 52%, #ff3156);
-  transform: rotate(32deg);
-  box-shadow: 0 0 18px rgba(120, 216, 255, 0.36);
-}
-
-.cat-logo-mark::after {
-  width: 6px;
-  height: 6px;
-  right: 0;
-  top: 3px;
-  background: #78d8ff;
-  box-shadow: -10px 15px 0 rgba(240, 192, 64, 0.9);
-}
-
-.cat-nav-brand strong {
-  color: #f8fafc;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.24rem;
-  font-weight: 700;
+  width: 116px;
+  height: auto;
+  object-fit: contain;
 }
 
 .cat-main {

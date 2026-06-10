@@ -95,8 +95,7 @@ export default function MovieCatalogPage({ videos, isLoading = false, onOpenVide
     <div className="movie-catalog">
       <nav className="cat-nav" aria-label="Vera navigation">
         <button className="cat-nav-brand" type="button" onClick={onGoHome}>
-          <span className="cat-logo-mark" aria-hidden="true" />
-          <strong>Vera</strong>
+          <img className="cat-brand-logo" src="/readme-assets/brand/vera-logo.png" alt="Vera" />
         </button>
         <TopNavActions onBrowseAll={onGoHome} onOpenAdmin={onOpenAdmin} activePage="browse" />
       </nav>

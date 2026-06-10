@@ -1,5 +1,9 @@
 # SceneVerse AI Frontend
 
+<p>
+  <img src="./public/readme-assets/brand/vera-logo.png" alt="Vera logo" width="280" />
+</p>
+
 SceneVerse AI is a web-first agentic movie companion. It lets a viewer pause a video scene, capture the frame, generate scene context, create character agents, and speak to the movie world through a coordinated multi-agent system.
 
 Tagline:

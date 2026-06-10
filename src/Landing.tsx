@@ -92,8 +92,7 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
     <div className="landing">
       <nav className="lnd-nav" aria-label="Vera navigation">
         <div className="lnd-nav-brand">
-          <span className="lnd-logo-mark" aria-hidden="true" />
-          <strong>Vera</strong>
+          <img className="lnd-brand-logo" src="/readme-assets/brand/vera-logo.png" alt="Vera" />
         </div>
         <TopNavActions onBrowseAll={onOpenCatalog} onOpenAdmin={onOpenAdmin} />
       </nav>
