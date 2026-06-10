@@ -1852,3 +1852,67 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── VR View ──────────────────────────────────────────────────────────────── */
+
+.vr-button {
+  left: 86px;
+}
+
+.vr-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: #05050a;
+  touch-action: none;
+  user-select: none;
+}
+
+.vr-canvas-mount {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.vr-exit {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  padding: 8px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 24px;
+  background: rgba(8, 9, 12, 0.72);
+  backdrop-filter: blur(8px);
+  color: #f6f2e9;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  z-index: 31;
+  transition: background 0.18s;
+}
+
+.vr-exit:hover {
+  background: rgba(127, 198, 255, 0.18);
+}
+
+.vr-enter-headset {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 26px;
+  border: 1px solid rgba(127, 198, 255, 0.4);
+  border-radius: 24px;
+  background: rgba(8, 9, 12, 0.72);
+  backdrop-filter: blur(8px);
+  color: #7fc6ff;
+  font-size: 0.86rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  z-index: 31;
+  transition: background 0.18s;
+}
+
+.vr-enter-headset:hover {
+  background: rgba(127, 198, 255, 0.18);
+}

@@ -185,6 +185,11 @@ export type CommerceCollectible = {
   recommendedContext: string;
 };
 
+export type SpeechSynthesisResult = {
+  audioUrl: string;
+  revoke: () => void;
+};
+
 export type VideoAsset = {
   videoId: string;
   sourceType: "upload" | "youtube" | "external_url";
@@ -1047,6 +1052,79 @@ export async function findCollectible(
     sourceUrl: "#",
     recommendedContext: "Use the Exa research source here once the backend research route is reachable.",
   };
+}
+
+export async function synthesizeSpeech(
+  character: string,
+  text: string,
+  timeoutMs = 30000,
+): Promise<SpeechSynthesisResult | null> {
+  if (!apiBaseUrl) return null;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    logAppEvent({
+      category: "api",
+      label: "POST /api/speech/synthesize",
+      detail: "request started",
+      status: "active",
+      metadata: { character },
+    });
+
+    const response = await fetch(`${apiBaseUrl}/api/speech/synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ character, text }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      logAppEvent({
+        category: "api",
+        label: "POST /api/speech/synthesize",
+        detail: `HTTP ${response.status}`,
+        status: "fallback",
+        metadata: { character },
+      });
+      return null;
+    }
+
+    const blob = await response.blob();
+    const audioUrl = URL.createObjectURL(blob);
+    logAppEvent({
+      category: "api",
+      label: "POST /api/speech/synthesize",
+      detail: "audio received",
+      status: "done",
+      metadata: {
+        character,
+        bytes: blob.size,
+        mediaType: response.headers.get("content-type"),
+      },
+    });
+    return {
+      audioUrl,
+      revoke: () => URL.revokeObjectURL(audioUrl),
+    };
+  } catch (error) {
+    logVeraDebug("speech synth error", {
+      character,
+      name: error instanceof Error ? error.name : "unknown",
+      message: error instanceof Error ? error.message : String(error),
+    });
+    logAppEvent({
+      category: "api",
+      label: "POST /api/speech/synthesize",
+      detail: error instanceof DOMException && error.name === "AbortError" ? "request timed out" : "request failed",
+      status: "fallback",
+      metadata: { character },
+    });
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 function mockChat(request: ChatRequest): ChatResponse {

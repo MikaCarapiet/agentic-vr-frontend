@@ -10,6 +10,7 @@ import {
   routeCharacter,
   sendChat,
   sendCharacterChat,
+  synthesizeSpeech,
   type AgentTrace,
   type AppMode,
   type ChatResponse,
@@ -39,6 +40,8 @@ import {
   FALLBACK_CATALOG_VIDEO,
   type CatalogVideo,
 } from "./videoCatalog";
+
+const VRSceneView = React.lazy(() => import("./VRSceneView"));
 
 type VoiceState = "idle" | "listening" | "thinking" | "speaking" | "error";
 
@@ -251,12 +254,16 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   const generationTimerRef = useRef<number | null>(null);
   const responseTimerRef = useRef<number | null>(null);
   const replyStreamTimerRef = useRef<number | null>(null);
+  const replyAnimationFrameRef = useRef<number | null>(null);
+  const replyAudioRef = useRef<HTMLAudioElement | null>(null);
+  const replyAudioCleanupRef = useRef<(() => void) | null>(null);
   const activeHistoryStreamIdsRef = useRef<Record<string, string>>({});
   const voiceRestartTimerRef = useRef<number | null>(null);
   const hudTimerRef = useRef<number | null>(null);
   const hudPinnedRef = useRef(false);
   const isScrubbingRef = useRef(false);
 
+  const [vrActive, setVrActive] = useState(false);
   const [mode, setMode] = useState<AppMode>("watching");
   const [hudVisible, setHudVisible] = useState(true);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -354,13 +361,43 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     return agents.find((agent) => agent.name.toLowerCase() === speaker.toLowerCase())?.id;
   }
 
+  function resolveSpeechCharacter(speaker: string) {
+    const normalized = speaker.trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized === "you") return null;
+    if (normalized === "cineverse") return "director";
+    if (normalized === "darth vader") return "vader";
+    return normalized;
+  }
+
+  function stopReplyPlayback() {
+    if (replyStreamTimerRef.current) {
+      window.clearInterval(replyStreamTimerRef.current);
+      replyStreamTimerRef.current = null;
+    }
+    if (replyAnimationFrameRef.current) {
+      window.cancelAnimationFrame(replyAnimationFrameRef.current);
+      replyAnimationFrameRef.current = null;
+    }
+    if (replyAudioRef.current) {
+      replyAudioRef.current.pause();
+      replyAudioRef.current.removeAttribute("src");
+      replyAudioRef.current.load();
+      replyAudioRef.current = null;
+    }
+    if (replyAudioCleanupRef.current) {
+      replyAudioCleanupRef.current();
+      replyAudioCleanupRef.current = null;
+    }
+  }
+
   useEffect(() => {
     return () => {
       voiceEnabledRef.current = false;
       veraSessionActiveRef.current = false;
       if (generationTimerRef.current) window.clearInterval(generationTimerRef.current);
       if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
-      if (replyStreamTimerRef.current) window.clearInterval(replyStreamTimerRef.current);
+      stopReplyPlayback();
       if (voiceRestartTimerRef.current) window.clearTimeout(voiceRestartTimerRef.current);
       if (hudTimerRef.current) window.clearTimeout(hudTimerRef.current);
       voiceInputRef.current?.abort?.();
@@ -780,10 +817,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   function speakResponse(response: string, speaker: string) {
     const speakerAgentId = resolveAgentIdBySpeaker(speaker);
     if (speakerAgentId) setActiveAgentId(speakerAgentId);
-    if (replyStreamTimerRef.current) {
-      window.clearInterval(replyStreamTimerRef.current);
-      replyStreamTimerRef.current = null;
-    }
+    stopReplyPlayback();
     setVoiceState("speaking");
     setCaption("");
 
@@ -794,28 +828,76 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
       return;
     }
 
-    const chunkSize = Math.max(3, Math.ceil(trimmedResponse.length / 90));
-    let nextLength = 0;
     const responseStreamId = upsertStreamingHistory(speaker, "");
+    const speechTokens = trimmedResponse.match(/\S+\s*/g) ?? [trimmedResponse];
+    const estimatedDurationMs = Math.max(
+      1400,
+      Math.min(14000, Math.round((speechTokens.length / 2.7) * 1000)),
+    );
 
-    replyStreamTimerRef.current = window.setInterval(() => {
-      nextLength = Math.min(trimmedResponse.length, nextLength + chunkSize);
-      const partial = trimmedResponse.slice(0, nextLength);
-      setCaption(partial);
-      upsertStreamingHistory(speaker, partial, responseStreamId);
-
-      if (nextLength < trimmedResponse.length) return;
-
-      if (replyStreamTimerRef.current) {
-        window.clearInterval(replyStreamTimerRef.current);
-        replyStreamTimerRef.current = null;
-      }
+    function finishResponseStream() {
+      stopReplyPlayback();
+      setCaption(trimmedResponse);
       pushHistory({ speaker, text: trimmedResponse }, responseStreamId);
       window.setTimeout(() => {
         setVoiceState(voiceSupported ? "listening" : "idle");
         if (mode === "watching") setCaption("");
       }, 900);
-    }, 34);
+    }
+
+    function startTimedReveal(audio?: HTMLAudioElement) {
+      const startedAt = performance.now();
+
+      const tick = () => {
+        const durationMs =
+          audio && Number.isFinite(audio.duration) && audio.duration > 0
+            ? audio.duration * 1000
+            : estimatedDurationMs;
+        const elapsedMs = audio ? audio.currentTime * 1000 : performance.now() - startedAt;
+        const progress = Math.max(0, Math.min(1, elapsedMs / durationMs));
+        const visibleTokenCount =
+          progress <= 0 ? 0 : Math.max(1, Math.min(speechTokens.length, Math.ceil(speechTokens.length * progress)));
+        const partial = speechTokens.slice(0, visibleTokenCount).join("").trimEnd();
+
+        setCaption(partial);
+        upsertStreamingHistory(speaker, partial, responseStreamId);
+
+        if ((audio && audio.ended) || progress >= 1) {
+          finishResponseStream();
+          return;
+        }
+
+        replyAnimationFrameRef.current = window.requestAnimationFrame(tick);
+      };
+
+      replyAnimationFrameRef.current = window.requestAnimationFrame(tick);
+    }
+
+    const speechCharacter = resolveSpeechCharacter(speaker);
+    if (!speechCharacter) {
+      startTimedReveal();
+      return;
+    }
+
+    void synthesizeSpeech(speechCharacter, trimmedResponse).then((speechAudio) => {
+      if (!speechAudio) {
+        startTimedReveal();
+        return;
+      }
+
+      const audio = new Audio(speechAudio.audioUrl);
+      audio.preload = "auto";
+      replyAudioRef.current = audio;
+      replyAudioCleanupRef.current = speechAudio.revoke;
+
+      const playPromise = audio.play();
+      startTimedReveal(audio);
+
+      void playPromise.catch(() => {
+        stopReplyPlayback();
+        startTimedReveal();
+      });
+    });
   }
 
   function captureFrame() {
@@ -1556,6 +1638,22 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         Back
       </button>
 
+      <button
+        className={layerClass("home-button vr-button", "vr-button")}
+        data-layer-id="vr-button"
+        data-layer-label="Enter VR view"
+        aria-label="Enter VR view"
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          selectLayer("vr-button");
+          setVrActive(true);
+        }}
+        onFocus={() => selectLayer("vr-button")}
+      >
+        VR
+      </button>
+
       <div className="scene-vignette" />
       <div className="ambient-field" aria-hidden="true">
         <span className="spark spark-one" />
@@ -1945,6 +2043,16 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
           <p>Vera is built for horizontal viewing so the scene stays immersive.</p>
         </div>
       </section>
+
+      {vrActive ? (
+        <React.Suspense fallback={null}>
+          <VRSceneView
+            videoRef={videoRef}
+            title={sceneVideo.title}
+            onExit={() => setVrActive(false)}
+          />
+        </React.Suspense>
+      ) : null}
 
     </main>
   );
