@@ -36,7 +36,9 @@ function getHeroTitleFitClass(title: string) {
 }
 
 export default function Landing({ videos, isLoading = false, onOpenVideo, onOpenCatalog, onOpenAdmin }: Props) {
-  const carouselVideos = videos.length ? videos : [FALLBACK_CATALOG_VIDEO];
+  const playableVideos = videos.filter((v) => v.playerPlayable);
+  const carouselVideos = playableVideos.length ? playableVideos : [FALLBACK_CATALOG_VIDEO];
+  const allVideos = videos.length > 1 ? videos : [FALLBACK_CATALOG_VIDEO];
   const [featuredIndex, setFeaturedIndex] = useState(() => randomVideoIndex(carouselVideos.length));
   const featuredVideo = carouselVideos[featuredIndex] ?? carouselVideos[0];
   const visibleCarouselVideos = useMemo(
@@ -78,7 +80,11 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
   }
 
   function openCatalogVideo(video: CatalogVideo) {
-    onOpenVideo(video.id);
+    if (video.playerPlayable) {
+      onOpenVideo(video.id);
+    } else if (video.externalUrl) {
+      window.open(video.externalUrl, "_blank", "noopener,noreferrer");
+    }
   }
 
   function openCatalogVideoFromCard(event: React.MouseEvent<HTMLButtonElement>, video: CatalogVideo) {
@@ -164,6 +170,39 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
           </div>
 
           <div className="lnd-universe-row" key={`row-${featuredVideo.id}`}>
+            {allVideos.filter((v) => v.id !== featuredVideo.id).slice(0, 3).map((item) => (
+              <article
+                className="lnd-universe-card is-clickable"
+                key={item.id}
+                data-video-id={item.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCatalogVideo(item)}
+                onKeyDown={(event) => previewCardFromKeyboard(event, item.id)}
+              >
+                <div className="lnd-card-copy">
+                  <span>{item.genre}</span>
+                  <strong>{item.title}</strong>
+                  <p>{item.tagline}</p>
+                </div>
+                <div className="lnd-card-footer">
+                  <div className="lnd-universe-metric">
+                    <strong>{item.year}</strong>
+                    <span>{item.sourceLabel}</span>
+                  </div>
+                  <div className="lnd-card-actions">
+                    <button
+                      className="lnd-card-watch"
+                      onClick={(event) => { event.stopPropagation(); openCatalogVideo(item); }}
+                      aria-label={`Watch ${item.title}`}
+                    >
+                      Watch
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+
             <article
               className="lnd-premiere-card active"
               data-video-id={featuredVideo.id}
@@ -191,40 +230,7 @@ export default function Landing({ videos, isLoading = false, onOpenVideo, onOpen
               </div>
             </article>
 
-            {secondaryVideos.map((item) => (
-              <article
-                className="lnd-universe-card is-clickable"
-                key={item.id}
-                data-video-id={item.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => featureVideo(item.id)}
-                onKeyDown={(event) => previewCardFromKeyboard(event, item.id)}
-              >
-                <div className="lnd-card-copy">
-                  <span>{item.genre}</span>
-                  <strong>{item.title}</strong>
-                  <p>{item.tagline}</p>
-                </div>
-                <div className="lnd-card-footer">
-                  <div className="lnd-universe-metric">
-                    <strong>{item.year}</strong>
-                    <span>{item.sourceLabel}</span>
-                  </div>
-                  <div className="lnd-card-actions">
-                    <button
-                      className="lnd-card-watch"
-                      onClick={(event) => openCatalogVideoFromCard(event, item)}
-                      aria-label={`Watch ${item.title}`}
-                    >
-                      Watch
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
-
-            {carouselVideos.length === 1 ? (
+            {videos.length <= 1 ? (
               <article className="lnd-universe-card muted">
                 <div>
                   <span>Catalogue</span>
