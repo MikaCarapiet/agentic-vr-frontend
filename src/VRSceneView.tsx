@@ -52,7 +52,9 @@ export default function VRSceneView({ videoRef, title, onExit }: VRSceneViewProp
     const videoAspect = video.videoWidth > 0 ? video.videoWidth / video.videoHeight : 16 / 9;
     const screenRadius = 4.2;
     const thetaLength = 1.4; // radians — roughly 80° arc
-    const thetaStart = Math.PI / 2 - thetaLength / 2;
+    // Three.js CylinderGeometry uses sin(θ)→X, cos(θ)→Z.
+    // θ=PI maps to -Z which is directly in front of the default camera.
+    const thetaStart = Math.PI - thetaLength / 2;
     const screenHeight = (screenRadius * thetaLength) / videoAspect;
 
     const screenGeo = new THREE.CylinderGeometry(
@@ -164,7 +166,8 @@ export default function VRSceneView({ videoRef, title, onExit }: VRSceneViewProp
       look.targetYaw = ((e.alpha ?? 0) * Math.PI) / 180;
       look.targetPitch = Math.max(-1.2, Math.min(1.2, ((e.beta - 90) * Math.PI) / 180));
     }
-    // On first tap, request iOS permission
+    // Request device orientation permission immediately (user gesture was the VR button click).
+    // iOS 13+ requires requestPermission(); on Android/desktop the event fires directly.
     async function requestOrientationPermission() {
       try {
         type DOE = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<string> };
@@ -176,10 +179,10 @@ export default function VRSceneView({ videoRef, title, onExit }: VRSceneViewProp
           window.addEventListener("deviceorientation", onDeviceOrientation);
         }
       } catch {
-        // silently ignore denial
+        // silently ignore — not available or denied
       }
     }
-    mount.addEventListener("pointerdown", requestOrientationPermission, { once: true });
+    void requestOrientationPermission();
 
     // Escape key
     function onKeyDown(e: KeyboardEvent) { if (e.key === "Escape") onExit(); }
