@@ -44,6 +44,11 @@ type HistoryItem = {
   streaming?: boolean;
 };
 
+type FormattedHistorySegment = {
+  kind: "speech" | "stage";
+  text: string;
+};
+
 type ToolEvent = {
   label: string;
   detail?: string;
@@ -174,6 +179,40 @@ function formatTime(seconds: number) {
     .toString()
     .padStart(2, "0");
   return `${minutes}:${remaining}`;
+}
+
+function stripRepeatedSpeaker(text: string, speaker: string) {
+  const speakerName = speaker.trim();
+  if (!speakerName || speakerName.toLowerCase() === "you") return text.trim();
+  const escapedSpeaker = speakerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const speakerParts = speakerName
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 2)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const speakerPattern = [escapedSpeaker, ...speakerParts].join("|");
+  return text.replace(new RegExp(`^\\s*(?:${speakerPattern})\\s*:\\s*`, "i"), "").trim();
+}
+
+function formatHistoryText(text: string, speaker: string): FormattedHistorySegment[] {
+  const cleanedText = stripRepeatedSpeaker(text, speaker);
+  const segments: FormattedHistorySegment[] = [];
+  const stageDirectionPattern = /(\*{1,2})([^*]+?)\1/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = stageDirectionPattern.exec(cleanedText)) !== null) {
+    const before = cleanedText.slice(cursor, match.index).trim();
+    if (before) segments.push({ kind: "speech", text: before });
+
+    const stageText = match[2]?.trim();
+    if (stageText) segments.push({ kind: "stage", text: stageText });
+    cursor = match.index + match[0].length;
+  }
+
+  const remaining = cleanedText.slice(cursor).trim();
+  if (remaining) segments.push({ kind: "speech", text: remaining });
+  return segments.length > 0 ? segments : [{ kind: "speech", text: cleanedText }];
 }
 
 type AppProps = {
@@ -1429,6 +1468,7 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
             const speakerAgentId = resolveAgentIdBySpeaker(item.speaker);
             const isActiveSpeaker = Boolean(speakerAgentId && index === latestSpeakerHistoryIndex);
             const speakerClass = item.speaker.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+            const segments = formatHistoryText(item.text, item.speaker);
             return (
             <article
               className={`${layerClass("history-item", `history-item-${index}`)} history-item-speaker-${speakerClass} ${
@@ -1445,7 +1485,16 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
               onFocus={() => selectLayer(`history-item-${index}`)}
             >
               <strong>{item.speaker}</strong>
-              <p>{item.text}</p>
+              <p>
+                {segments.map((segment, segmentIndex) => (
+                  <span
+                    className={segment.kind === "stage" ? "history-stage-direction" : "history-speech"}
+                    key={`${segment.kind}-${segment.text}-${segmentIndex}`}
+                  >
+                    {segment.text}
+                  </span>
+                ))}
+              </p>
             </article>
             );
           })}

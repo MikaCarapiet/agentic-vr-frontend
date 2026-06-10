@@ -844,6 +844,25 @@ button {
   white-space: normal;
 }
 
+.response-history p .history-speech + .history-speech {
+  margin-left: 0.25em;
+}
+
+.history-stage-direction {
+  display: block;
+  margin: 0.28rem 0;
+  color: rgba(255, 251, 243, 0.52);
+  font-style: italic;
+}
+
+.history-stage-direction:first-child {
+  margin-top: 0;
+}
+
+.history-stage-direction:last-child {
+  margin-bottom: 0;
+}
+
 .tool-card {
   position: absolute;
   z-index: 6;
