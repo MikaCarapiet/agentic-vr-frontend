@@ -243,6 +243,7 @@ const catalogueReadTimeoutMs = 15000;
 const sceneAnalysisTimeoutMs = 45000;
 const characterRouterTimeoutMs = 10000;
 const characterChatTimeoutMs = 30000;
+const researchTimeoutMs = 45000;
 
 export function resolveBackendAssetUrl(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -847,7 +848,7 @@ export async function findCollectible(
     const backendResponse = await postJson<BackendResearchResponse>("/api/research", {
       sceneId,
       query,
-    });
+    }, researchTimeoutMs);
 
     if (backendResponse) {
       const primarySource = backendResponse.sources[0];

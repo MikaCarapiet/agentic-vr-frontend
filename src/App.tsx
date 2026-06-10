@@ -1118,6 +1118,40 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
       showTool({ label: "Exa: finding collectible", detail: route.objectLabel ?? "scene item" });
     }
 
+    if (route.kind === "commerce_collect") {
+      const collectible =
+        (await collectiblePromise) ??
+        (await findCollectible(
+          sceneId,
+          `${utterance} collectible replica ${route.objectLabel ?? sceneObjects.join(" ")} scene item`,
+        ));
+      setLastIntent("commerce_collect");
+      setCommerceCollectible(collectible);
+      setAgentTrace(route.agentTrace);
+      logAppEvent({
+        category: "commerce",
+        label: collectible.title,
+        detail: collectible.summary,
+        status: collectible.sourceUrl === "#" ? "fallback" : "done",
+        metadata: {
+          sourceTitle: collectible.sourceTitle,
+          sourceUrl: collectible.sourceUrl,
+          objectLabel: route.objectLabel,
+        },
+      });
+      showTool({
+        label: collectible.sourceUrl === "#" ? "Collectible fallback" : "Collectible found",
+        detail: collectible.sourceTitle,
+      });
+      speakResponse(
+        collectible.sourceUrl === "#"
+          ? "I could not confirm a live product yet, but I saved a likely match."
+          : `I found a likely match: ${collectible.title}.`,
+        "Director",
+      );
+      return;
+    }
+
     let routerTrace: AgentTrace[] = [];
     let routedTargetAgentId = route.targetAgentId ?? activeAgentId;
     if (route.kind === "character_chat" && route.explicitTargetAgentId) {
