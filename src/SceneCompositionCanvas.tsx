@@ -82,7 +82,7 @@ function fallbackSubjects(composition: SceneComposition): SceneSubject[] {
       y0: cy - halfHeight,
       x1: cx + halfWidth,
       y1: cy + halfHeight,
-      color: { r: 214, g: 228, b: 255 },
+      color: { r: 110, g: 195, b: 255 },
       axisAngle: Math.PI / 2,
       energy: Math.max(0.45, 1 - index * 0.18),
       contour,
@@ -246,7 +246,7 @@ export default function SceneCompositionCanvas({
       const py = (ny: number) => rect.y + ny * rect.h;
       const elapsed = now - state.entryStart;
       const scanProgress = clamp01(elapsed / SCAN_DURATION);
-      const masterAlpha = isEntry ? 1 : 0.6;
+      const masterAlpha = isEntry ? 1 : 0.96;
 
       context.globalCompositeOperation = "lighter";
 
@@ -256,13 +256,13 @@ export default function SceneCompositionCanvas({
         const eased = easeInOutCubic(scanProgress);
         beamX = rect.x + (-0.06 + 1.12 * eased) * rect.w;
         const envelope = Math.sin(scanProgress * Math.PI);
-        const beamWidth = rect.w * 0.055;
+        const beamWidth = rect.w * 0.07;
         const gradientFill = context.createLinearGradient(beamX - beamWidth, 0, beamX + beamWidth, 0);
-        gradientFill.addColorStop(0, "rgba(150, 200, 255, 0)");
-        gradientFill.addColorStop(0.46, `rgba(170, 212, 255, ${0.16 * envelope})`);
-        gradientFill.addColorStop(0.5, `rgba(255, 255, 255, ${0.5 * envelope})`);
-        gradientFill.addColorStop(0.54, `rgba(170, 212, 255, ${0.16 * envelope})`);
-        gradientFill.addColorStop(1, "rgba(150, 200, 255, 0)");
+        gradientFill.addColorStop(0, "rgba(80, 190, 255, 0)");
+        gradientFill.addColorStop(0.4, `rgba(80, 190, 255, ${0.42 * envelope})`);
+        gradientFill.addColorStop(0.5, `rgba(255, 255, 255, ${0.98 * envelope})`);
+        gradientFill.addColorStop(0.6, `rgba(120, 120, 255, ${0.42 * envelope})`);
+        gradientFill.addColorStop(1, "rgba(120, 120, 255, 0)");
         context.save();
         context.translate(beamX, canvas.height / 2);
         context.rotate(-0.06);
@@ -272,13 +272,13 @@ export default function SceneCompositionCanvas({
         context.restore();
 
         // Sparkles riding the beam edge.
-        for (let i = 0; i < 9; i += 1) {
+        for (let i = 0; i < 12; i += 1) {
           const seed = Math.floor(now / 90) * 9 + i;
           const sparkY = rect.y + pseudoRandom(seed) * rect.h;
-          const sparkAlpha = 0.5 * envelope * pseudoRandom(seed + 0.5);
+          const sparkAlpha = 0.72 * envelope * pseudoRandom(seed + 0.5);
           context.fillStyle = `rgba(255, 255, 255, ${sparkAlpha})`;
           context.beginPath();
-          context.arc(beamX + (pseudoRandom(seed + 0.2) - 0.5) * 14, sparkY, 1.4, 0, Math.PI * 2);
+          context.arc(beamX + (pseudoRandom(seed + 0.2) - 0.5) * 18, sparkY, 1.9, 0, Math.PI * 2);
           context.fill();
         }
       } else if (isEntry && scanProgress >= 1) {
@@ -313,8 +313,8 @@ export default function SceneCompositionCanvas({
         const auraRadius = Math.max(bboxW, bboxH) * 0.55 * breath;
         if (auraRadius > 4 && !isEnvironment) {
           const aura = context.createRadialGradient(centerX, centerY, auraRadius * 0.12, centerX, centerY, auraRadius);
-          aura.addColorStop(0, rgba(halo, (isEntry ? 0.17 : 0.09) * baseAlpha));
-          aura.addColorStop(0.62, rgba(subject.color, (isEntry ? 0.1 : 0.05) * baseAlpha));
+          aura.addColorStop(0, rgba(halo, (isEntry ? 0.42 : 0.3) * baseAlpha));
+          aura.addColorStop(0.62, rgba(subject.color, (isEntry ? 0.28 : 0.19) * baseAlpha));
           aura.addColorStop(1, rgba(subject.color, 0));
           context.save();
           context.translate(centerX, centerY);
@@ -333,45 +333,17 @@ export default function SceneCompositionCanvas({
           const reach = easeOutCubic(burstProgress);
           const fade = Math.pow(1 - burstProgress, 1.7);
           context.lineCap = "round";
-          for (let i = 0; i < 16; i += 1) {
+          for (let i = 0; i < 20; i += 1) {
             const pick = subject.contour[Math.floor(pseudoRandom(i * 3.7 + 1) * subject.contour.length)];
             const startX = px(pick.x);
             const startY = py(pick.y);
             const angle = Math.atan2(startY - centerY, startX - centerX) + (pseudoRandom(i + 9) - 0.5) * 0.7;
-            const length = (14 + pseudoRandom(i + 4) * 36) * reach;
-            context.strokeStyle = rgba(mixToWhite(subject.color, 0.6), fade * 0.8 * masterAlpha);
-            context.lineWidth = 1.6;
+            const length = (24 + pseudoRandom(i + 4) * 60) * reach;
+            context.strokeStyle = rgba(mixToWhite(subject.color, 0.28), Math.min(1, fade * masterAlpha * 1.18));
+            context.lineWidth = 3.5;
             context.beginPath();
             context.moveTo(startX + Math.cos(angle) * length * 0.45, startY + Math.sin(angle) * length * 0.45);
             context.lineTo(startX + Math.cos(angle) * length, startY + Math.sin(angle) * length);
-            context.stroke();
-          }
-        }
-
-        // Targeting brackets snapping onto the real bounding box.
-        const bracketProgress = clamp01(sinceIgnite / BRACKET_DURATION);
-        const overshoot = 1 + 0.24 * (1 - easeOutCubic(bracketProgress));
-        const bracketAlpha =
-          baseAlpha * (0.5 + 0.16 * Math.sin(now / 640 + subject.packetPhase * 9)) * easeOutCubic(bracketProgress);
-        if (bracketAlpha > 0.01 && !isEnvironment) {
-          const halfW = (bboxW / 2) * overshoot;
-          const halfH = (bboxH / 2) * overshoot;
-          const arm = Math.min(Math.max(Math.min(bboxW, bboxH) * 0.17, 12), 36);
-          context.strokeStyle = rgba(mixToWhite(subject.color, 0.55), bracketAlpha);
-          context.lineWidth = 2;
-          context.lineCap = "round";
-          for (const [sx, sy] of [
-            [-1, -1],
-            [1, -1],
-            [1, 1],
-            [-1, 1],
-          ] as const) {
-            const cornerX = centerX + sx * halfW;
-            const cornerY = centerY + sy * halfH;
-            context.beginPath();
-            context.moveTo(cornerX - sx * arm, cornerY);
-            context.lineTo(cornerX, cornerY);
-            context.lineTo(cornerX, cornerY - sy * arm);
             context.stroke();
           }
         }
@@ -380,23 +352,27 @@ export default function SceneCompositionCanvas({
           // Light packets racing along the detected silhouette.
           const count = subject.contour.length;
           const packetLength = Math.max(7, Math.floor(count * 0.22));
-          const speed = isEntry ? 0.34 : 0.2;
-          for (let packet = 0; packet < 2; packet += 1) {
+          const speed = isEntry ? 0.34 : 0.24;
+          for (let packet = 0; packet < 3; packet += 1) {
             const headFloat =
-              ((now / 1000) * speed + subject.packetPhase + packet * 0.5) % 1;
+              ((now / 1000) * speed + subject.packetPhase + packet / 3) % 1;
             const head = Math.floor(headFloat * count);
             for (let j = 0; j < packetLength; j += 1) {
               const point = subject.contour[(head - j + count * 4) % count];
               const fade = Math.pow(1 - j / packetLength, 1.6);
               const x = px(point.x);
               const y = py(point.y);
-              context.fillStyle = rgba(subject.color, 0.4 * fade * baseAlpha);
+              context.fillStyle = rgba(subject.color, 0.34 * fade * baseAlpha);
               context.beginPath();
-              context.arc(x, y, 1.6 + 2.6 * fade * point.w, 0, Math.PI * 2);
+              context.arc(x, y, 5 + 9 * fade * point.w, 0, Math.PI * 2);
               context.fill();
-              context.fillStyle = `rgba(255, 255, 255, ${0.7 * fade * fade * baseAlpha})`;
+              context.fillStyle = rgba(subject.color, 0.95 * fade * baseAlpha);
               context.beginPath();
-              context.arc(x, y, 0.9 + 1.1 * fade, 0, Math.PI * 2);
+              context.arc(x, y, 2.6 + 4.2 * fade * point.w, 0, Math.PI * 2);
+              context.fill();
+              context.fillStyle = `rgba(255, 255, 255, ${Math.min(1, 1.15 * fade * fade * baseAlpha)})`;
+              context.beginPath();
+              context.arc(x, y, 1.4 + 1.9 * fade, 0, Math.PI * 2);
               context.fill();
             }
           }
@@ -408,9 +384,13 @@ export default function SceneCompositionCanvas({
             for (const point of subject.contour) {
               const x = px(point.x);
               const y = py(point.y);
-              context.fillStyle = rgba(halo, 0.34 * flashEnvelope * point.w * baseAlpha);
+              context.fillStyle = rgba(subject.color, 0.52 * flashEnvelope * point.w * baseAlpha);
               context.beginPath();
-              context.arc(x, y, 1.2 + 2.4 * point.w, 0, Math.PI * 2);
+              context.arc(x, y, 4 + 6.4 * point.w, 0, Math.PI * 2);
+              context.fill();
+              context.fillStyle = rgba(halo, 0.95 * flashEnvelope * point.w * baseAlpha);
+              context.beginPath();
+              context.arc(x, y, 1.8 + 3.2 * point.w, 0, Math.PI * 2);
               context.fill();
             }
           }
@@ -431,15 +411,19 @@ export default function SceneCompositionCanvas({
               centerY + sin * (travel + diag * 0.55),
             );
             streakGradient.addColorStop(0, rgba(subject.color, 0));
-            streakGradient.addColorStop(0.5, rgba(mixToWhite(subject.color, 0.7), 0.55 * streakEnvelope * baseAlpha));
+            streakGradient.addColorStop(0.5, rgba(mixToWhite(subject.color, 0.32), Math.min(1, 1.12 * streakEnvelope * baseAlpha)));
             streakGradient.addColorStop(1, rgba(subject.color, 0));
+            context.save();
+            context.shadowColor = rgba(subject.color, Math.min(1, streakEnvelope * baseAlpha * 1.2));
+            context.shadowBlur = 26;
             context.strokeStyle = streakGradient;
-            context.lineWidth = 2.6;
+            context.lineWidth = 6.2;
             context.lineCap = "round";
             context.beginPath();
             context.moveTo(centerX + cos * (travel - diag * 0.55), centerY + sin * (travel - diag * 0.55));
             context.lineTo(centerX + cos * (travel + diag * 0.55), centerY + sin * (travel + diag * 0.55));
             context.stroke();
+            context.restore();
           }
         }
       }

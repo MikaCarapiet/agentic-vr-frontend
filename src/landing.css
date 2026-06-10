@@ -131,6 +131,68 @@
   color: #e2e8f0;
 }
 
+.lnd-fullscreen-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid rgba(120, 216, 255, 0.22);
+  border-radius: 999px;
+  padding: 0 12px;
+  color: rgba(226, 232, 240, 0.82);
+  background: rgba(15, 23, 42, 0.38);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.lnd-fullscreen-button:hover,
+.lnd-fullscreen-button:focus-visible,
+.lnd-fullscreen-button.active {
+  border-color: rgba(120, 216, 255, 0.5);
+  color: #f8fafc;
+  background: rgba(120, 216, 255, 0.1);
+}
+
+.lnd-fullscreen-button:focus-visible {
+  outline: 2px solid rgba(120, 216, 255, 0.5);
+  outline-offset: 3px;
+}
+
+.lnd-fullscreen-button:hover {
+  transform: translateY(-1px);
+}
+
+.lnd-fullscreen-icon {
+  position: relative;
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.lnd-fullscreen-icon::before,
+.lnd-fullscreen-icon::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  border: 1.8px solid currentColor;
+}
+
+.lnd-fullscreen-icon::before {
+  clip-path: polygon(0 0, 45% 0, 45% 16%, 16% 16%, 16% 45%, 0 45%, 0 0, 100% 0, 100% 45%, 84% 45%, 84% 16%, 55% 16%, 55% 0);
+}
+
+.lnd-fullscreen-icon::after {
+  clip-path: polygon(0 55%, 16% 55%, 16% 84%, 45% 84%, 45% 100%, 0 100%, 0 55%, 55% 100%, 55% 84%, 84% 84%, 84% 55%, 100% 55%, 100% 100%, 55% 100%);
+}
+
 .lnd-hero {
   position: relative;
   z-index: 1;

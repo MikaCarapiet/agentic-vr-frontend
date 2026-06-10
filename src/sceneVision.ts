@@ -248,17 +248,25 @@ function buildSubject(
   }
   let color: SubjectColor;
   if (colorWeight < 0.5) {
-    color = { r: 214, g: 228, b: 255 };
+    color = { r: 110, g: 205, b: 255 };
   } else {
     red /= colorWeight;
     green /= colorWeight;
     blue /= colorWeight;
     const peak = Math.max(red, green, blue, 1);
-    const boost = Math.min(235 / peak, 3.2);
+    let r = red / peak;
+    let g = green / peak;
+    let b = blue / peak;
+    // Exaggerate the hue so the glow reads vividly against the footage.
+    const mean = (r + g + b) / 3;
+    const amp = 2.35;
+    r = Math.min(1, Math.max(0, mean + (r - mean) * amp));
+    g = Math.min(1, Math.max(0, mean + (g - mean) * amp));
+    b = Math.min(1, Math.max(0, mean + (b - mean) * amp));
     color = {
-      r: Math.round(Math.min(255, red * boost * 0.82 + 46)),
-      g: Math.round(Math.min(255, green * boost * 0.82 + 46)),
-      b: Math.round(Math.min(255, blue * boost * 0.82 + 46)),
+      r: Math.round(r * 255),
+      g: Math.round(g * 255),
+      b: Math.round(b * 255),
     };
   }
 

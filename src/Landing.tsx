@@ -10,6 +10,15 @@ type Props = {
 
 const CAROUSEL_INTERVAL_MS = 4000;
 
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
+
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
+
 function randomVideoIndex(_total: number) {
   return 0;
 }
@@ -83,6 +92,7 @@ function useVideoThumbnail(src: string, seekTime = 1.5) {
 export default function Landing({ videos, isLoading = false, onOpenVideo }: Props) {
   const carouselVideos = videos.length ? videos : [FALLBACK_CATALOG_VIDEO];
   const [featuredIndex, setFeaturedIndex] = useState(() => randomVideoIndex(carouselVideos.length));
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const featuredVideo = carouselVideos[featuredIndex] ?? carouselVideos[0];
   const visibleCarouselVideos = useMemo(
     () => rotateVideos(carouselVideos, featuredIndex).slice(0, Math.min(4, carouselVideos.length)),
@@ -106,6 +116,21 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
 
     return () => window.clearTimeout(timeoutId);
   }, [carouselVideos.length, featuredIndex]);
+
+  useEffect(() => {
+    function syncFullscreenState() {
+      const fullscreenDocument = document as FullscreenDocument;
+      setIsFullscreen(Boolean(document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement));
+    }
+
+    syncFullscreenState();
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    document.addEventListener("webkitfullscreenchange", syncFullscreenState);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      document.removeEventListener("webkitfullscreenchange", syncFullscreenState);
+    };
+  }, []);
 
   function openFeaturedVideo() {
     openCatalogVideo(featuredVideo);
@@ -147,6 +172,30 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
     openCatalogVideo(video);
   }
 
+  async function toggleFullscreen() {
+    const fullscreenDocument = document as FullscreenDocument;
+    const root = document.documentElement as FullscreenElement;
+
+    try {
+      if (document.fullscreenElement || fullscreenDocument.webkitFullscreenElement) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else {
+          await fullscreenDocument.webkitExitFullscreen?.();
+        }
+        return;
+      }
+
+      if (root.requestFullscreen) {
+        await root.requestFullscreen({ navigationUI: "hide" });
+      } else {
+        await root.webkitRequestFullscreen?.();
+      }
+    } catch {
+      setIsFullscreen(Boolean(document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement));
+    }
+  }
+
   return (
     <div className="landing">
       <nav className="lnd-nav" aria-label="CineVerse navigation">
@@ -156,8 +205,15 @@ export default function Landing({ videos, isLoading = false, onOpenVideo }: Prop
         </div>
         <div className="lnd-nav-actions">
           <span className="lnd-token">100 scene credits</span>
-          <button className="lnd-nav-link" onClick={openFeaturedVideo}>
-            Enter
+          <button
+            className={`lnd-fullscreen-button${isFullscreen ? " active" : ""}`}
+            type="button"
+            onClick={toggleFullscreen}
+            aria-pressed={isFullscreen}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          >
+            <span className="lnd-fullscreen-icon" aria-hidden="true" />
+            <span>{isFullscreen ? "Exit" : "Fullscreen"}</span>
           </button>
         </div>
       </nav>

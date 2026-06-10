@@ -248,7 +248,7 @@ button {
 }
 
 .mode-in-scene .scene-composition-layer {
-  opacity: 0.72;
+  opacity: 1;
 }
 
 .scene-composition-layer::before {
