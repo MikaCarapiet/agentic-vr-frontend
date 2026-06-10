@@ -1181,7 +1181,8 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
     });
 
     if (veraSessionActiveRef.current) {
-      handleUtterance(utterance);
+      const activeParsed = parseWakeCommand(utterance);
+      handleUtterance(activeParsed.isWakeInvocation && activeParsed.command ? activeParsed.command : utterance);
       return;
     }
 
@@ -1194,7 +1195,10 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
 
     activateVeraSession();
     if (parsed.command) {
-      handleUtterance(formatWakeCaption(parsed.command));
+      setHeardText(parsed.command);
+      setCaption(parsed.command);
+      pushHistory({ speaker: "You", text: parsed.command });
+      void handleUtterancePayload(parsed.command);
     }
   }
 
