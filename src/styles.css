@@ -233,66 +233,44 @@ button {
   animation-delay: -5.3s;
 }
 
-.generation-wave {
+.scene-composition-layer {
   position: absolute;
   inset: 0;
   z-index: 2;
   overflow: hidden;
   pointer-events: none;
   opacity: 0;
-  mix-blend-mode: screen;
   transition: opacity 360ms ease;
 }
 
-.mode-generating .generation-wave {
+.mode-generating .scene-composition-layer {
   opacity: 1;
 }
 
-.generation-wave::before {
+.mode-in-scene .scene-composition-layer {
+  opacity: 0.72;
+}
+
+.scene-composition-layer::before {
   position: absolute;
-  inset: -30% -45%;
+  inset: 0;
   content: "";
-  background:
-    linear-gradient(105deg, transparent 0 34%, rgba(127, 198, 255, 0.06) 40%, rgba(245, 197, 110, 0.26) 46%, rgba(255, 255, 255, 0.42) 50%, rgba(127, 198, 255, 0.2) 56%, transparent 66%),
-    linear-gradient(105deg, transparent 0 40%, rgba(245, 197, 110, 0.14) 48%, transparent 62%);
-  filter: blur(14px);
-  transform: translateX(-62%) skewX(-10deg);
-}
-
-.mode-generating .generation-wave::before {
-  animation: energySweep 5.6s cubic-bezier(0.33, 0, 0.18, 1) infinite;
-}
-
-.generation-wave span {
-  position: absolute;
-  left: -28%;
-  width: 48%;
-  height: 1px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(245, 197, 110, 0.58), rgba(255, 255, 255, 0.48), rgba(127, 198, 255, 0.28), transparent);
-  box-shadow:
-    0 0 20px rgba(245, 197, 110, 0.3),
-    0 0 44px rgba(127, 198, 255, 0.16);
+  background: radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.1), transparent 36%);
+  mix-blend-mode: screen;
   opacity: 0;
-  transform: rotate(-12deg);
 }
 
-.generation-wave span:nth-child(1) {
-  top: 34%;
+.mode-generating .scene-composition-layer::before,
+.mode-in-scene .scene-composition-layer::before {
+  animation: compositionRead 5.2s ease-in-out infinite;
 }
 
-.generation-wave span:nth-child(2) {
-  top: 51%;
-  animation-delay: 160ms;
-}
-
-.generation-wave span:nth-child(3) {
-  top: 67%;
-  animation-delay: 310ms;
-}
-
-.mode-generating .generation-wave span {
-  animation: energyRipple 5.6s cubic-bezier(0.33, 0, 0.18, 1) infinite;
+.scene-composition-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  mix-blend-mode: screen;
 }
 
 .top-bar,
@@ -1256,6 +1234,24 @@ button {
 
   72% {
     filter: saturate(1.26) brightness(1.08);
+  }
+}
+
+@keyframes compositionRead {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: scale(0.96);
+  }
+
+  42% {
+    opacity: 0.48;
+    transform: scale(1.03);
+  }
+
+  68% {
+    opacity: 0.3;
+    transform: scale(1.06);
   }
 }
 

@@ -22,6 +22,8 @@ import {
 } from "./openaiRealtimeTranscription";
 import { routeUtterance } from "./sceneRouter";
 import { logVeraDebug } from "./veraDebug";
+import { getSceneComposition } from "./sceneComposition";
+import SceneCompositionCanvas from "./SceneCompositionCanvas";
 import "./styles.css";
 import AdminVideosPage from "./AdminVideosPage";
 import Landing from "./Landing";
@@ -258,6 +260,10 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
       inSceneNavigationPrompts[5],
     ] satisfies Array<InSceneCommand | string>;
   }, [agents]);
+  const sceneComposition = useMemo(
+    () => getSceneComposition(sceneVideo.id, currentTime, activeAgentId),
+    [activeAgentId, currentTime, sceneVideo.id],
+  );
 
   function layerClass(baseClass: string, layerId: string) {
     return `${baseClass} layer-target ${selectedLayer === layerId ? "layer-selected" : ""}`;
@@ -1127,6 +1133,18 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
     void handleUtterance(`Hey Vera, ${prompt}`);
   }
 
+  const handleUtteranceRef = useRef(handleUtterance);
+  handleUtteranceRef.current = handleUtterance;
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const devWindow = window as typeof window & { __sceneverseSay?: (utterance: string) => void };
+    devWindow.__sceneverseSay = (utterance: string) => handleUtteranceRef.current(utterance);
+    return () => {
+      delete devWindow.__sceneverseSay;
+    };
+  }, []);
+
   function handleVoiceFinal(utterance: string) {
     if (!utterance.trim()) return;
     logVeraDebug("voice final", {
@@ -1225,10 +1243,8 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
         <span className="spark spark-two" />
         <span className="spark spark-three" />
       </div>
-      <div className="generation-wave" aria-hidden="true">
-        <span />
-        <span />
-        <span />
+      <div className="scene-composition-layer" aria-hidden="true" data-composition-id={sceneComposition.id}>
+        <SceneCompositionCanvas videoRef={videoRef} mode={mode} fallback={sceneComposition} />
       </div>
 
       {commerceCollectible ? (
