@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 const sceneverseProfile = (
   process.env.SCENEVERSE_PROFILE ??
   process.env.VITE_SCENEVERSE_PROFILE ??
-  "local"
+  "cloud"
 ).toLowerCase();
 const profileProxyTarget =
   sceneverseProfile === "cloud"
