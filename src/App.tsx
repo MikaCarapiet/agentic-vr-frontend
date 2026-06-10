@@ -1301,7 +1301,20 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
 
     setCheckoutState("loading");
     setCheckoutError("");
-    showTool({ label: "Stripe Checkout", detail: "creating secure session" });
+    const checkoutItems = cartItems.map((item) => ({
+      title: item.title,
+      sourceTitle: item.sourceTitle,
+      sourceUrl: item.sourceUrl !== "#" ? item.sourceUrl : undefined,
+      summary: item.summary,
+      quantity: item.quantity,
+    }));
+    const agentName = activeAgent?.name ? `${activeAgent.name} Commerce Agent` : "Vera Commerce Agent";
+    const agentReason =
+      commerceCollectible?.recommendedContext ||
+      memorySummary ||
+      "The viewer asked about an object in the active scene, so Vera surfaced a relevant collectible and opened checkout.";
+
+    showTool({ label: "Agentic Stripe Checkout", detail: "creating itemized session" });
     logAppEvent({
       category: "commerce",
       label: "Checkout started",
@@ -1309,11 +1322,9 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
       status: "active",
       metadata: {
         sceneId,
-        cartItems: cartItems.map((item) => ({
-          title: item.title,
-          quantity: item.quantity,
-          sourceUrl: item.sourceUrl,
-        })),
+        agentName,
+        agentReason,
+        cartItems: checkoutItems,
       },
     });
 
@@ -1321,6 +1332,9 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
       const checkout = await createCheckoutSession({
         sceneId,
         unlockType: "agentic_commerce_cart",
+        agentName,
+        agentReason,
+        items: checkoutItems,
       });
       logAppEvent({
         category: "commerce",
@@ -2041,7 +2055,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
           onFocus={() => selectLayer("cart-panel")}
         >
           <header>
-            <span>Scene cart</span>
+            <span>Agentic commerce</span>
             <button
               type="button"
               aria-label="Close cart"
@@ -2080,8 +2094,8 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
               </div>
               <footer className="cart-checkout">
                 <span>
-                  {cartItemCount} item{cartItemCount === 1 ? "" : "s"} from {cartUnitCount} scene match
-                  {cartUnitCount === 1 ? "" : "es"}
+                  Vera found {cartItemCount} item{cartItemCount === 1 ? "" : "s"} from {cartUnitCount} scene match
+                  {cartUnitCount === 1 ? "" : "es"} and will open Stripe Checkout.
                 </span>
                 <button
                   type="button"
@@ -2091,7 +2105,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
                     void handleCheckout();
                   }}
                 >
-                  {checkoutState === "loading" ? "Opening..." : "Checkout"}
+                  {checkoutState === "loading" ? "Opening..." : "Open Stripe Checkout"}
                 </button>
                 {checkoutError ? <em>{checkoutError}</em> : null}
               </footer>
@@ -2129,9 +2143,9 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
           <div className="commerce-card-copy">
             <span className="commerce-card-kicker">
               {commerceCartState === "awaiting_confirmation"
-                ? "Add to cart?"
+                ? "Exa match → add to cart?"
                 : commerceCartState === "added"
-                  ? "Cart request"
+                  ? "Ready for Stripe Checkout"
                   : "Exa collectible"}
             </span>
             <strong>{commerceCollectible.title}</strong>

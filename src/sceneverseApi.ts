@@ -193,6 +193,15 @@ export type CommerceCollectible = {
 export type CheckoutRequest = {
   sceneId: string;
   unlockType?: string;
+  agentName?: string;
+  agentReason?: string;
+  items?: Array<{
+    title: string;
+    sourceTitle?: string;
+    sourceUrl?: string;
+    summary?: string;
+    quantity?: number;
+  }>;
 };
 
 export type CheckoutResponse = {
