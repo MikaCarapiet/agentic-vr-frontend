@@ -21,7 +21,11 @@ export type CharacterAgent = {
   id: string;
   name: string;
   role: string;
-  emotionalState: string;
+  emotionalState?: string;
+  personality?: string;
+  goals?: string[];
+  knowledgeBoundaries?: string[];
+  speakingStyle?: string;
 };
 
 type BackendTraceStatus = "pending" | "complete" | "fallback" | "error";
@@ -67,6 +71,18 @@ type BackendChatResponse = {
   };
   response: string;
   updatedMemorySummary: string;
+  agentTrace: BackendAgentTrace[];
+};
+
+type BackendCharacterRouterResponse = {
+  sceneId: string;
+  targetAgent: {
+    id: string;
+    name: string;
+    type: "character";
+  };
+  reason: string;
+  confidence: number;
   agentTrace: BackendAgentTrace[];
 };
 
@@ -124,6 +140,15 @@ export type ChatRequest = {
     isPlaying: boolean;
     mode: AppMode;
   };
+};
+
+export type CharacterRouteResponse = {
+  sceneId: string;
+  targetAgentId: string;
+  targetAgentName: string;
+  reason: string;
+  confidence: number;
+  agentTrace: AgentTrace[];
 };
 
 export type ChatResponse = {
@@ -557,6 +582,10 @@ function normalizeCharacter(character: BackendCharacter): CharacterAgent {
     name: character.name,
     role: character.role,
     emotionalState: character.emotionalState,
+    personality: character.personality,
+    goals: character.goals,
+    knowledgeBoundaries: character.knowledgeBoundaries,
+    speakingStyle: character.speakingStyle,
   };
 }
 
@@ -611,9 +640,36 @@ export async function analyzeScene(
     emotionalTone: "ancient tension, restraint, threat",
     objects: ["green blade", "masked armor", "mist", "forest crossing"],
     characters: [
-      { id: "mentor", name: "Yoda", role: "mentor", emotionalState: "calm but burdened" },
-      { id: "shadow", name: "Vader", role: "antagonist", emotionalState: "controlled fury" },
-      { id: "director", name: "Director", role: "story lens", emotionalState: "observant" },
+      {
+        id: "mentor",
+        name: "Yoda",
+        role: "mentor",
+        emotionalState: "calm but burdened",
+        personality: "patient, cryptic, disciplined",
+        goals: ["understand the threat", "protect balance"],
+        knowledgeBoundaries: ["Only knows what can be inferred from this paused scene."],
+        speakingStyle: "short, reflective, indirect",
+      },
+      {
+        id: "shadow",
+        name: "Vader",
+        role: "antagonist",
+        emotionalState: "controlled fury",
+        personality: "dominant, severe, wounded",
+        goals: ["force submission", "test the opponent's resolve"],
+        knowledgeBoundaries: ["Only knows what can be inferred from this paused scene."],
+        speakingStyle: "terse, imposing, absolute",
+      },
+      {
+        id: "director",
+        name: "Director",
+        role: "story lens",
+        emotionalState: "observant",
+        personality: "analytical, cinematic, continuity-focused",
+        goals: ["explain scene meaning", "maintain story consistency"],
+        knowledgeBoundaries: ["Can use scene metadata and public context when routed by the orchestrator."],
+        speakingStyle: "clear, interpretive, concise",
+      },
     ],
     memorySummary:
       "The viewer has entered a duel scene where Vader challenges Yoda's restraint and the blade functions as a symbol of choice.",
@@ -636,6 +692,52 @@ export async function sendChat(request: ChatRequest): Promise<ChatResponse> {
     if (backendResponse) {
       return {
         intent: inferIntentFromResponse(request, backendResponse),
+        respondingAgent: backendResponse.respondingAgent.name,
+        response: backendResponse.response,
+        updatedMemorySummary: backendResponse.updatedMemorySummary,
+        agentTrace: normalizeTrace(backendResponse.agentTrace),
+        targetAgentId: backendResponse.respondingAgent.id,
+      };
+    }
+  }
+
+  return mockChat(request);
+}
+
+export async function routeCharacter(
+  sceneId: string | null,
+  message: string,
+  targetAgentId?: string,
+): Promise<CharacterRouteResponse | null> {
+  if (!sceneId) return null;
+
+  const backendResponse = await postJson<BackendCharacterRouterResponse>("/api/character/router", {
+    sceneId,
+    message,
+    targetAgentId,
+  });
+  if (!backendResponse) return null;
+
+  return {
+    sceneId: backendResponse.sceneId,
+    targetAgentId: backendResponse.targetAgent.id,
+    targetAgentName: backendResponse.targetAgent.name,
+    reason: backendResponse.reason,
+    confidence: backendResponse.confidence,
+    agentTrace: normalizeTrace(backendResponse.agentTrace),
+  };
+}
+
+export async function sendCharacterChat(request: ChatRequest): Promise<ChatResponse> {
+  if (request.sceneId) {
+    const backendResponse = await postJson<BackendChatResponse>("/api/character/chat", {
+      sceneId: request.sceneId,
+      message: request.message,
+      characterId: request.targetAgentId,
+    });
+    if (backendResponse) {
+      return {
+        intent: "character_chat",
         respondingAgent: backendResponse.respondingAgent.name,
         response: backendResponse.response,
         updatedMemorySummary: backendResponse.updatedMemorySummary,
