@@ -356,14 +356,30 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
   const activePreview = previewVideo ? getPreviewSource(previewVideo) : null;
   const dbContext = getDatabaseContext(dbHealth);
 
-  async function refreshVideos(nextMessage = "Catalogue synced.") {
+  function upsertVideo(video: VideoAsset) {
+    setVideos((current) => [video, ...current.filter((item) => item.videoId !== video.videoId)]);
+    setDrafts((current) => ({ ...current, [video.videoId]: draftFromVideo(video) }));
+  }
+
+  async function refreshVideos(
+    nextMessage = "Catalogue synced.",
+    options: { keepExistingOnFailure?: boolean; failureMessage?: string } = {},
+  ) {
     setIsLoading(true);
     const [response, health] = await Promise.all([listVideos(100), getDatabaseHealth()]);
     const nextVideos = response?.items ?? [];
-    setVideos(nextVideos);
+    if (response) {
+      setVideos(nextVideos);
+      setDrafts(Object.fromEntries(nextVideos.map((video) => [video.videoId, draftFromVideo(video)])));
+      setMessage(nextMessage);
+    } else if (!options.keepExistingOnFailure) {
+      setVideos([]);
+      setDrafts({});
+      setMessage(options.failureMessage ?? "Backend video catalogue unavailable.");
+    } else {
+      setMessage(options.failureMessage ?? "Catalogue refresh is still syncing. Latest saved changes remain visible.");
+    }
     setDbHealth(health);
-    setDrafts(Object.fromEntries(nextVideos.map((video) => [video.videoId, draftFromVideo(video)])));
-    setMessage(response ? nextMessage : "Backend video catalogue unavailable.");
     setIsLoading(false);
   }
 
@@ -421,7 +437,13 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
     setLinkTitle("");
     setLinkDescription("");
     setLinkUrl("");
-    await refreshVideos(`Created linked video ${created.videoId}.`);
+    upsertVideo(created);
+    const successMessage = `Created ${getVideoTitle(created)}.`;
+    setMessage(successMessage);
+    void refreshVideos(successMessage, {
+      keepExistingOnFailure: true,
+      failureMessage: `${successMessage} Catalogue refresh is still syncing.`,
+    });
   }
 
   async function handleUpload(event: React.FormEvent<HTMLFormElement>) {
@@ -437,6 +459,7 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
     }
 
     setBusyId("upload");
+    setMessage(`Uploading ${uploadFile.name}...`);
     const uploaded = await uploadVideo(uploadFile, uploadTitle, uploadDescription);
     setBusyId(null);
     if (!uploaded) {
@@ -448,7 +471,13 @@ export default function AdminVideosPage({ onOpenVideo }: Props) {
     setUploadDescription("");
     setUploadFile(null);
     event.currentTarget.reset();
-    await refreshVideos(`Uploaded video ${uploaded.videoId}.`);
+    upsertVideo(uploaded);
+    const successMessage = `Uploaded ${getVideoTitle(uploaded)}.`;
+    setMessage(successMessage);
+    void refreshVideos(successMessage, {
+      keepExistingOnFailure: true,
+      failureMessage: `${successMessage} Catalogue refresh is still syncing.`,
+    });
   }
 
   async function handleSave(video: VideoAsset) {
