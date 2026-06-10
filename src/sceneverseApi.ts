@@ -231,6 +231,7 @@ export type DeleteVideoResponse = {
 
 const apiBaseUrl = (import.meta.env.VITE_SCENEVERSE_API_BASE_URL ?? "/backend").replace(/\/$/, "");
 const apiTimeoutMs = 2400;
+const catalogueReadTimeoutMs = 15000;
 
 export function resolveBackendAssetUrl(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -479,11 +480,11 @@ export async function listVideos(limit = 24, offset = 0): Promise<VideoListRespo
     limit: String(limit),
     offset: String(offset),
   });
-  return getJson<VideoListResponse>(`/api/videos?${params.toString()}`, 8000);
+  return getJson<VideoListResponse>(`/api/videos?${params.toString()}`, catalogueReadTimeoutMs);
 }
 
 export async function getDatabaseHealth(): Promise<DatabaseHealthResponse | null> {
-  return getJson<DatabaseHealthResponse>("/health/db", 8000);
+  return getJson<DatabaseHealthResponse>("/health/db", catalogueReadTimeoutMs);
 }
 
 export async function getVideo(videoId: string): Promise<VideoAsset | null> {
