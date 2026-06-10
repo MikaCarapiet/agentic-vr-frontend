@@ -1554,6 +1554,16 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   const shouldShowResponseHistory = visibleHistory.length > 0;
 
   return (
+    <>
+      {vrActive ? (
+        <React.Suspense fallback={null}>
+          <VRSceneView
+            videoRef={videoRef}
+            title={sceneVideo.title}
+            onExit={() => setVrActive(false)}
+          />
+        </React.Suspense>
+      ) : null}
     <main
       className={`experience mode-${mode} ${hudVisible ? "hud-visible" : "hud-idle"}${vrActive ? " vr-active" : ""}`}
       data-layer-id="app-root"
@@ -1568,15 +1578,6 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         }
       }}
     >
-      {vrActive ? (
-        <React.Suspense fallback={null}>
-          <VRSceneView
-            videoRef={videoRef}
-            title={sceneVideo.title}
-            onExit={() => setVrActive(false)}
-          />
-        </React.Suspense>
-      ) : null}
 
       {isNativeVideo ? (
         <video
@@ -2056,6 +2057,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
 
 
     </main>
+    </>
   );
 }
 

@@ -1860,12 +1860,12 @@ button {
   left: 86px;
 }
 
-/* VR background — first child of <main>, behind everything by DOM order */
+/* VR background — fixed sibling before <main>, fills the viewport behind the player */
 .vr-background {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  /* no z-index: painted first in DOM, everything else paints on top */
-  pointer-events: none; /* player receives all events */
+  z-index: 1;
+  pointer-events: none;
 }
 
 .vr-canvas-mount {
@@ -1874,13 +1874,17 @@ button {
   overflow: hidden;
 }
 
-/* Subtle theater framing when VR is active */
-.vr-active .scene-video,
-.vr-active .scene-composition-layer,
-.vr-active .scene-vignette,
-.vr-active .ambient-field {
-  border-radius: 8px;
-  box-shadow: 0 0 80px rgba(127, 198, 255, 0.18);
+/* Theater screen: scale the player down so the star field shows around it */
+.vr-active {
+  z-index: 2;
+  background: transparent !important;
+  transform: scale(0.82);
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 1px rgba(127, 198, 255, 0.18),
+    0 0 60px rgba(127, 198, 255, 0.12),
+    0 24px 120px rgba(0, 0, 0, 0.8);
+  transition: transform 420ms ease, box-shadow 420ms ease;
 }
 
 /* Enter-headset pill (only shown when WebXR is available) */
