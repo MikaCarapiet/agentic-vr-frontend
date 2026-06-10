@@ -52,6 +52,8 @@ type BackendCharacter = {
 type BackendSceneAnalysisResponse = {
   sceneId: string;
   sceneSummary: string;
+  analysisMode?: "live" | "fallback";
+  sourceModelId?: string | null;
   scene: {
     objects: string[];
     emotionalTone: string;
@@ -124,6 +126,9 @@ export type SceneAnalysisRequest = {
 export type SceneAnalysisResponse = {
   sceneId: string;
   sceneSummary: string;
+  analysisMode: "live" | "fallback" | "local-fallback";
+  sourceModelId?: string | null;
+  source: "backend" | "local-fallback";
   emotionalTone: string;
   objects: string[];
   characters: CharacterAgent[];
@@ -232,6 +237,7 @@ export type DeleteVideoResponse = {
 const apiBaseUrl = (import.meta.env.VITE_SCENEVERSE_API_BASE_URL ?? "/backend").replace(/\/$/, "");
 const apiTimeoutMs = 2400;
 const catalogueReadTimeoutMs = 15000;
+const sceneAnalysisTimeoutMs = 45000;
 
 export function resolveBackendAssetUrl(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -621,11 +627,14 @@ export async function analyzeScene(
       title: request.videoMetadata.title,
       source: request.videoMetadata.source,
     },
-  });
+  }, sceneAnalysisTimeoutMs);
   if (backendResponse) {
     return {
       sceneId: backendResponse.sceneId,
       sceneSummary: backendResponse.sceneSummary,
+      analysisMode: backendResponse.analysisMode ?? "live",
+      sourceModelId: backendResponse.sourceModelId ?? null,
+      source: "backend",
       emotionalTone: backendResponse.scene.emotionalTone,
       objects: backendResponse.scene.objects,
       characters: backendResponse.characters.map(normalizeCharacter),
@@ -638,6 +647,9 @@ export async function analyzeScene(
     sceneId: `scene-${Math.round(request.timestamp * 1000)}`,
     sceneSummary:
       "A mist-covered duel pauses at the moment two opposing forces face each other across the forest.",
+    analysisMode: "local-fallback",
+    sourceModelId: null,
+    source: "local-fallback",
     emotionalTone: "ancient tension, restraint, threat",
     objects: ["green blade", "masked armor", "mist", "forest crossing"],
     characters: [
@@ -676,7 +688,7 @@ export async function analyzeScene(
       "The viewer has entered a duel scene where Vader challenges Yoda's restraint and the blade functions as a symbol of choice.",
     agentTrace: [
       { agent: "Vercel Frontend", step: "paused frame + timestamp prepared", status: "done" },
-      { agent: "Scene Parser", step: "fallback scene context loaded", status: "fallback" },
+      { agent: "Local Scene Fallback", step: "backend analysis unavailable after extended wait", status: "fallback" },
       { agent: "Memory", step: "in-memory scene state initialized", status: "done" },
       { agent: "Orchestrator", step: "agents ready for chat", status: "done" },
     ],

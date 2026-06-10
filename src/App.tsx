@@ -715,8 +715,31 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
 
   async function finishGeneration() {
     const video = videoRef.current;
+    let frame: string | null = null;
+    try {
+      frame = captureFrame();
+    } catch (error) {
+      logVeraDebug("frame capture failed", {
+        name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    const frameBytes = frame?.length ?? 0;
+    logAppEvent({
+      category: "scene",
+      label: frame ? "Frame captured" : "Frame unavailable",
+      detail: frame ? "paused frame prepared for analysis" : "video frame could not be read",
+      status: frame ? "done" : "fallback",
+      metadata: {
+        frameCaptured: Boolean(frame),
+        frameBytes,
+        timestamp: video?.currentTime ?? currentTime,
+        videoWidth: video?.videoWidth ?? 0,
+        videoHeight: video?.videoHeight ?? 0,
+      },
+    });
     const analysis = await analyzeScene({
-      frame: captureFrame(),
+      frame,
       timestamp: video?.currentTime ?? currentTime,
       transcriptSegment:
         "Two powerful figures face each other in a misted forest. A green blade glows between restraint and threat.",
@@ -733,10 +756,15 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
     logAppEvent({
       category: "scene",
       label: "Scene parsed",
-      detail: analysis.sceneSummary,
-      status: analysis.agentTrace.some((step) => step.status === "fallback") ? "fallback" : "done",
+      detail: analysis.source === "local-fallback" ? `Local fallback: ${analysis.sceneSummary}` : analysis.sceneSummary,
+      status: analysis.source === "local-fallback" || analysis.agentTrace.some((step) => step.status === "fallback") ? "fallback" : "done",
       metadata: {
         sceneId: analysis.sceneId,
+        analysisMode: analysis.analysisMode,
+        analysisSource: analysis.source,
+        sourceModelId: analysis.sourceModelId,
+        frameCaptured: Boolean(frame),
+        frameBytes,
         objects: analysis.objects,
         characters: analysis.characters.map((agent) => agent.name),
         emotionalTone: analysis.emotionalTone,
