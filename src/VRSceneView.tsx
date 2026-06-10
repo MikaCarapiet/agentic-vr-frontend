@@ -5,9 +5,10 @@ type VRSceneViewProps = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   title: string;
   onExit: () => void;
+  lookRef?: React.MutableRefObject<{ yaw: number; pitch: number } | null>;
 };
 
-export default function VRSceneView({ onExit }: VRSceneViewProps) {
+export default function VRSceneView({ onExit, lookRef }: VRSceneViewProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const xrButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -124,7 +125,8 @@ export default function VRSceneView({ onExit }: VRSceneViewProps) {
     mount.addEventListener("pointerup",   onPointerUp);
     mount.addEventListener("pointercancel", onPointerUp);
 
-    // DeviceOrientation — phone gyro for mobile look-around
+    // DeviceOrientation — phone gyro for standalone look-around.
+    // Stereo mode passes lookRef so the parent owns the one permissioned listener.
     let deviceOrientationActive = false;
     function onDeviceOrientation(e: DeviceOrientationEvent) {
       if (e.beta == null || e.gamma == null) return;
@@ -144,7 +146,7 @@ export default function VRSceneView({ onExit }: VRSceneViewProps) {
         }
       } catch { /* silently ignore */ }
     }
-    void requestOrientationPermission();
+    if (!lookRef) void requestOrientationPermission();
 
     // Escape key
     function onKeyDown(e: KeyboardEvent) { if (e.key === "Escape") onExit(); }
@@ -183,6 +185,11 @@ export default function VRSceneView({ onExit }: VRSceneViewProps) {
 
       if (!prefersReducedMotion && !deviceOrientationActive && !pointerDown) {
         look.targetYaw += 0.00015; // very slow auto-drift
+      }
+
+      if (lookRef?.current) {
+        look.targetYaw = lookRef.current.yaw;
+        look.targetPitch = lookRef.current.pitch;
       }
 
       look.yaw   += (look.targetYaw   - look.yaw)   * 0.1;

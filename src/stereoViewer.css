@@ -3,26 +3,36 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #030305;
+  background: #000;
   color: #f6f2e9;
+  touch-action: none;
 }
 
 .stereo-stage {
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   width: 100%;
   height: 100%;
   gap: 0;
-  padding: 58px 0 clamp(8px, 1.2vw, 18px);
-  background: #030305;
+  padding: clamp(18px, 4vh, 42px) 0;
+  background: transparent;
 }
 
 .stereo-eye {
   position: relative;
+  align-self: center;
+  justify-self: center;
+  width: min(49vw, 96vh);
+  height: min(49vw, 96vh);
   min-width: 0;
-  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   overflow: hidden;
-  background: #050507;
+  border-radius: 50%;
+  background: transparent;
+  clip-path: circle(49% at 50% 50%);
 }
 
 .stereo-eye::after {
@@ -37,28 +47,38 @@
 
 .stereo-app-frame {
   position: absolute;
-  width: 124%;
-  height: 124%;
-  top: -12%;
-  left: -12%;
+  width: 84%;
+  height: 47.25%;
+  top: 50%;
+  left: 50%;
   border: 0;
   pointer-events: none;
   background: #050507;
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 1px rgba(127, 198, 255, 0.18),
+    0 0 34px rgba(127, 198, 255, 0.22),
+    0 22px 70px rgba(0, 0, 0, 0.78);
+  transform: translate3d(
+    calc(-50% + var(--stereo-ipd, 0%) + var(--stereo-pan-x, 0px)),
+    calc(-50% + var(--stereo-pan-y, 0px)),
+    0
+  );
 }
 
 .stereo-eye-left .stereo-app-frame {
-  transform: translateX(1.2%);
+  --stereo-ipd: 1.2%;
 }
 
 .stereo-eye-right .stereo-app-frame {
-  transform: translateX(-1.2%);
+  --stereo-ipd: -1.2%;
 }
 
 .stereo-controls {
   position: absolute;
   top: 12px;
   left: 50%;
-  z-index: 6;
+  z-index: 8;
   display: flex;
   gap: 8px;
   translate: -50% 0;
@@ -85,6 +105,51 @@
   display: none;
 }
 
+.stereo-viewer::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  z-index: 5;
+  width: 2px;
+  content: "";
+  background: linear-gradient(transparent, rgba(127, 198, 255, 0.3), transparent);
+  transform: translateX(-50%);
+}
+
+.stereo-start {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  border: 0;
+  color: #fffaf0;
+  background:
+    radial-gradient(circle at center, rgba(127, 198, 255, 0.14), transparent 38%),
+    rgba(0, 0, 0, 0.62);
+  text-align: center;
+}
+
+.stereo-start span {
+  color: #7fc6ff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.stereo-start strong {
+  max-width: min(560px, 72vw);
+  font-size: 1.35rem;
+}
+
+.stereo-start:disabled {
+  cursor: wait;
+  opacity: 0.82;
+}
+
 @media (orientation: portrait) and (max-width: 900px) {
   .stereo-stage,
   .stereo-controls {
@@ -94,7 +159,7 @@
   .stereo-orientation-lock {
     position: fixed;
     inset: 0;
-    z-index: 10;
+    z-index: 12;
     display: grid;
     place-items: center;
     padding: 22px;

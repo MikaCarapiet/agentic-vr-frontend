@@ -29,6 +29,13 @@ import { logVeraDebug } from "./veraDebug";
 import { getSceneComposition } from "./sceneComposition";
 import SceneCompositionCanvas from "./SceneCompositionCanvas";
 import type { SceneRegion } from "./sceneVision";
+import {
+  publishStereoEvent,
+  stereoRole,
+  subscribeStereoChannel,
+  subscribeStereoEvents,
+  type StereoEvent,
+} from "./stereoSync";
 import "./styles.css";
 import AdminVideosPage from "./AdminVideosPage";
 import Landing from "./Landing";
@@ -42,8 +49,6 @@ import {
   FALLBACK_CATALOG_VIDEO,
   type CatalogVideo,
 } from "./videoCatalog";
-
-const VRSceneView = React.lazy(() => import("./VRSceneView"));
 
 type VoiceState = "idle" | "listening" | "thinking" | "speaking" | "error";
 
@@ -286,11 +291,11 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   const replyAudioCleanupRef = useRef<(() => void) | null>(null);
   const activeHistoryStreamIdsRef = useRef<Record<string, string>>({});
   const voiceRestartTimerRef = useRef<number | null>(null);
+  const stereoApplyRef = useRef<(event: StereoEvent) => void>(() => {});
   const hudTimerRef = useRef<number | null>(null);
   const hudPinnedRef = useRef(false);
   const isScrubbingRef = useRef(false);
 
-  const [vrActive, setVrActive] = useState(false);
   const [mode, setMode] = useState<AppMode>("watching");
   const [hudVisible, setHudVisible] = useState(true);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -357,6 +362,8 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   );
   const isNativeVideo = sceneVideo.mediaKind === "html-video";
   const isYouTubeVideo = sceneVideo.mediaKind === "youtube" && Boolean(sceneVideo.embedUrl);
+  const isPrimaryStereo = stereoRole === "primary";
+  const isMirrorStereo = stereoRole === "mirror";
   const youTubeEmbedUrl = useMemo(() => {
     if (!sceneVideo.embedUrl) return "";
     const separator = sceneVideo.embedUrl.includes("?") ? "&" : "?";
@@ -713,6 +720,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   }
 
   function showTool(event: ToolEvent, clearAfter = 2400) {
+    publishStereoEvent(sceneVideo.id, { type: "tool", label: event.label, detail: event.detail });
     setLatestTool(event);
     revealHud(Math.max(6200, clearAfter + 1500));
     logAppEvent({
@@ -847,6 +855,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   }
 
   function speakResponse(response: string, speaker: string) {
+    publishStereoEvent(sceneVideo.id, { type: "speak", speaker, text: response });
     const speakerAgentId = resolveAgentIdBySpeaker(speaker);
     if (speakerAgentId) setActiveAgentId(speakerAgentId);
     stopReplyPlayback();
@@ -906,7 +915,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     }
 
     const speechCharacter = resolveSpeechCharacter(speaker);
-    if (!speechCharacter) {
+    if (isMirrorStereo || !speechCharacter) {
       startTimedReveal();
       return;
     }
@@ -961,6 +970,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   }
 
   async function runGeneration() {
+    publishStereoEvent(sceneVideo.id, { type: "mode", mode: "generating" });
     const video = videoRef.current;
     if (isNativeVideo) {
       video?.pause();
@@ -1042,6 +1052,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     });
 
     applySceneAnalysis(analysis);
+    publishStereoEvent(sceneVideo.id, { type: "scene-analysis", analysis });
     setCharacterRegions(
       analysis.characters
         .filter((character) => character.box)
@@ -1070,6 +1081,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
       },
     });
     setMode("in-scene");
+    publishStereoEvent(sceneVideo.id, { type: "mode", mode: "in-scene" });
     setGenerationStep(-1);
     setActiveAgentId(analysis.characters[0]?.id ?? "director");
     showTool({
@@ -1168,6 +1180,8 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   }
 
   async function handleVideoControl(action: ChatResponse["action"], actionSeconds?: number) {
+    if (!action) return false;
+    publishStereoEvent(sceneVideo.id, { type: "video-control", action, seconds: actionSeconds });
     const video = videoRef.current;
     const skipSeconds = actionSeconds ?? (action === "rewind" ? 10 : 20);
     logVeraDebug("video control requested", {
@@ -1192,6 +1206,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     if (action === "play") {
       if (mode === "in-scene") {
         setMode("watching");
+        publishStereoEvent(sceneVideo.id, { type: "mode", mode: "watching" });
         setActiveAgentId("director");
       }
       const played = await playVideo();
@@ -1328,6 +1343,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   }
 
   async function handleUtterancePayload(utterance: string) {
+    if (isMirrorStereo) return;
     logVeraDebug("utterance payload", {
       utterance,
       mode,
@@ -1397,6 +1413,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
 
     if (route.kind === "scene_exit") {
       setMode("watching");
+      publishStereoEvent(sceneVideo.id, { type: "mode", mode: "watching" });
       setActiveAgentId("director");
       speakResponse(route.response ?? "Returning to cinematic controls.", "Director");
       return;
@@ -1411,6 +1428,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         }
         if (inSceneNavigation.exitMode) {
           setMode(inSceneNavigation.exitMode);
+          publishStereoEvent(sceneVideo.id, { type: "mode", mode: inSceneNavigation.exitMode });
         }
         showTool({ label: "Navigation control", detail: inSceneNavigation.detail });
         speakResponse(inSceneNavigation.response, "Director");
@@ -1438,6 +1456,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         ));
       setLastIntent("commerce_collect");
       setCommerceCollectible(collectible);
+      publishStereoEvent(sceneVideo.id, { type: "commerce", collectible });
       setAgentTrace(route.agentTrace);
       logAppEvent({
         category: "commerce",
@@ -1565,6 +1584,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
           `${utterance} collectible replica ${route.objectLabel ?? sceneObjects.join(" ")} scene item`,
         ));
       setCommerceCollectible(collectible);
+      publishStereoEvent(sceneVideo.id, { type: "commerce", collectible });
       logAppEvent({
         category: "commerce",
         label: collectible.title,
@@ -1602,6 +1622,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     const parsed = parseWakeCommand(utterance);
     setHeardText(utterance);
     pushHistory({ speaker: "You", text: utterance });
+    publishStereoEvent(sceneVideo.id, { type: "heard", text: utterance });
 
     if (parsed.isWakeInvocation) {
       logVeraDebug("utterance wake invocation", { command: parsed.command });
@@ -1689,19 +1710,118 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   }, -1);
   const shouldShowResponseHistory = visibleHistory.length > 0;
 
+  useEffect(() => {
+    if (stereoRole === null) return;
+    const startTime = Number.parseFloat(new URLSearchParams(window.location.search).get("t") ?? "");
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(startTime) || startTime <= 0) return;
+
+    const seekOnMetadata = () => {
+      video.currentTime = Math.min(startTime, video.duration || startTime);
+      setCurrentTime(video.currentTime);
+    };
+
+    if (video.readyState >= 1) seekOnMetadata();
+    else video.addEventListener("loadedmetadata", seekOnMetadata, { once: true });
+    return () => video.removeEventListener("loadedmetadata", seekOnMetadata);
+  }, []);
+
+  useEffect(() => {
+    if (!isMirrorStereo) return;
+    const video = videoRef.current;
+    if (video) video.muted = true;
+  }, [isMirrorStereo]);
+
+  useEffect(() => {
+    if (!isPrimaryStereo) return;
+    const intervalId = window.setInterval(() => {
+      const video = videoRef.current;
+      if (!video) return;
+      publishStereoEvent(sceneVideo.id, {
+        type: "time",
+        t: video.currentTime,
+        playing: !video.paused,
+      });
+    }, 500);
+    return () => window.clearInterval(intervalId);
+  }, [isPrimaryStereo, sceneVideo.id]);
+
+  stereoApplyRef.current = (event: StereoEvent) => {
+    if (event.type === "time") {
+      const video = videoRef.current;
+      if (!video) return;
+      video.muted = true;
+      if (Math.abs(video.currentTime - event.t) > 0.3) {
+        video.currentTime = event.t;
+        setCurrentTime(event.t);
+      }
+      if (event.playing && video.paused) void playVideo();
+      if (!event.playing && !video.paused) pauseVideo();
+      return;
+    }
+
+    if (event.type === "video-control") {
+      void handleVideoControl(event.action, event.seconds);
+      return;
+    }
+
+    if (event.type === "heard") {
+      setHeardText(event.text);
+      setCaption(event.text);
+      pushHistory({ speaker: "You", text: event.text });
+      return;
+    }
+
+    if (event.type === "speak") {
+      speakResponse(event.text, event.speaker);
+      return;
+    }
+
+    if (event.type === "mode") {
+      setMode(event.mode);
+      if (event.mode === "generating") setGenerationStep(0);
+      if (event.mode === "watching") setActiveAgentId("director");
+      return;
+    }
+
+    if (event.type === "scene-analysis") {
+      const analysis = event.analysis as Parameters<typeof applySceneAnalysis>[0];
+      applySceneAnalysis(analysis);
+      setCharacterRegions(
+        analysis.characters
+          .filter((character) => character.box)
+          .map((character) => ({
+            id: character.id,
+            label: character.name,
+            box: character.box as [number, number, number, number],
+          })),
+      );
+      setActiveAgentId(analysis.characters[0]?.id ?? "director");
+      return;
+    }
+
+    if (event.type === "tool") {
+      showTool({ label: event.label, detail: event.detail });
+      return;
+    }
+
+    if (event.type === "commerce") {
+      setCommerceCollectible(event.collectible as CommerceCollectible);
+    }
+  };
+
+  useEffect(() => {
+    if (isPrimaryStereo) {
+      return subscribeStereoChannel(sceneVideo.id, (event) => {
+        if (event.type === "video-control") stereoApplyRef.current(event);
+      });
+    }
+    return subscribeStereoEvents(sceneVideo.id, (event) => stereoApplyRef.current(event));
+  }, [isPrimaryStereo, sceneVideo.id]);
+
   return (
-    <>
-      {vrActive ? (
-        <React.Suspense fallback={null}>
-          <VRSceneView
-            videoRef={videoRef}
-            title={sceneVideo.title}
-            onExit={() => setVrActive(false)}
-          />
-        </React.Suspense>
-      ) : null}
     <main
-      className={`experience mode-${mode} ${hudVisible ? "hud-visible" : "hud-idle"}${vrActive ? " vr-active" : ""}`}
+      className={`experience mode-${mode} ${hudVisible ? "hud-visible" : "hud-idle"}`}
       data-layer-id="app-root"
       data-layer-label="App root"
       onPointerMove={() => revealHud()}
@@ -1786,21 +1906,25 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         Back
       </button>
 
-      <button
-        className={layerClass("home-button vr-button", "vr-button")}
-        data-layer-id="vr-button"
-        data-layer-label={vrActive ? "Exit VR view" : "Enter VR view"}
-        aria-label={vrActive ? "Exit VR view" : "Enter VR view"}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          selectLayer("vr-button");
-          setVrActive((v) => !v);
-        }}
-        onFocus={() => selectLayer("vr-button")}
-      >
-        {vrActive ? "Exit VR" : "VR"}
-      </button>
+      {stereoRole === null && isNativeVideo ? (
+        <button
+          className={layerClass("home-button vr-button", "vr-button")}
+          data-layer-id="vr-button"
+          data-layer-label="Enter stereo VR"
+          aria-label="Enter stereo VR"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            selectLayer("vr-button");
+            const t = videoRef.current?.currentTime ?? currentTime;
+            pauseVideo();
+            navigateTo(`/stereo/video/${encodeURIComponent(sceneVideo.id)}?t=${t.toFixed(2)}`);
+          }}
+          onFocus={() => selectLayer("vr-button")}
+        >
+          VR
+        </button>
+      ) : null}
 
       <button
         className={layerClass("home-button cart-button", "cart-button")}
@@ -2317,7 +2441,6 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
 
 
     </main>
-    </>
   );
 }
 
@@ -2397,7 +2520,7 @@ export default function Root() {
   const catalogLoadedRef = useRef(false);
   const activeRouteVideoId =
     route.name === "video" || route.name === "stereoVideo" ? route.videoId : null;
-  const presentationOnly = new URLSearchParams(window.location.search).has("stereoFrame");
+  const presentationOnly = new URLSearchParams(window.location.search).get("stereoFrame") === "mirror";
   const prepareInFlightRef = useRef<string | null>(null);
   const routeVideoCandidate =
     activeRouteVideoId
@@ -2649,7 +2772,12 @@ export default function Root() {
   }
 
   if (route.name === "stereoVideo") {
-    return <StereoViewer video={activeVideo} onExit={() => navigateTo(videoPath(activeVideo.id))} />;
+    return (
+      <StereoViewer
+        video={activeVideo}
+        onExit={(time = 0) => navigateTo(`${videoPath(activeVideo.id)}?t=${Math.max(0, time).toFixed(2)}`)}
+      />
+    );
   }
 
   return (
