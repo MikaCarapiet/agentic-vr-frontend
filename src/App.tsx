@@ -334,9 +334,11 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const visibleHistory = history.slice(-4);
   const cartItemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
+  const isStereoFrame = stereoRole !== null;
   const centerCaption =
     caption && caption !== "Say “step into this scene”" ? caption : "";
   const hudPinned =
+    !isStereoFrame &&
     voiceEnabled &&
     (veraSessionActive ||
       voiceState === "listening" ||
@@ -1821,7 +1823,9 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
 
   return (
     <main
-      className={`experience mode-${mode} ${hudVisible ? "hud-visible" : "hud-idle"}`}
+      className={`experience mode-${mode} ${hudVisible ? "hud-visible" : "hud-idle"}${
+        isStereoFrame ? ` stereo-frame stereo-frame-${stereoRole}` : ""
+      }`}
       data-layer-id="app-root"
       data-layer-label="App root"
       onPointerMove={() => revealHud()}

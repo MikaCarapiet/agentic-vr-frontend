@@ -96,6 +96,7 @@ button {
 .tool-card,
 .generation-panel,
 .commerce-card,
+.cart-panel,
 .home-button,
 .bottom-bar {
   transition:
@@ -109,6 +110,7 @@ button {
 .hud-idle .tool-card,
 .hud-idle .generation-panel,
 .hud-idle .commerce-card,
+.hud-idle .cart-panel,
 .hud-idle .home-button,
 .hud-idle .bottom-bar {
   opacity: 0;
@@ -117,7 +119,8 @@ button {
 }
 
 .hud-idle .control-guide,
-.hud-idle .commerce-card {
+.hud-idle .commerce-card,
+.hud-idle .cart-panel {
   transform: translateY(8px);
 }
 
@@ -2118,6 +2121,158 @@ button {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ── Stereo frame HUD tuning ──────────────────────────────────────────────── */
+
+.stereo-frame .home-button {
+  top: 14px;
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 0.58rem;
+}
+
+.stereo-frame .vr-button {
+  display: none;
+}
+
+.stereo-frame .cart-button {
+  left: 90px;
+  gap: 5px;
+}
+
+.stereo-frame .cart-count {
+  min-width: 14px;
+  height: 14px;
+  font-size: 0.48rem;
+}
+
+.stereo-frame .control-guide {
+  left: 12px;
+  bottom: 54px;
+  width: min(196px, 30vw);
+  border-radius: 9px;
+  padding: 7px 8px;
+}
+
+.stereo-frame .guide-wake {
+  gap: 7px;
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+}
+
+.stereo-frame .guide-wake span {
+  font-size: 0.48rem;
+}
+
+.stereo-frame .guide-wake strong {
+  font-size: 0.6rem;
+}
+
+.stereo-frame .control-guide ul {
+  gap: 1px;
+}
+
+.stereo-frame .control-prompt {
+  padding: 2px 3px;
+  font-size: 0.54rem;
+  line-height: 1.18;
+}
+
+.stereo-frame .response-history {
+  top: 52px;
+  right: 10px;
+  gap: 5px;
+  min-height: 142px;
+  width: min(250px, 34vw);
+  max-height: calc(100vh - 112px);
+}
+
+.stereo-frame .response-history article {
+  border-radius: 7px 3px 3px 7px;
+  padding: 6px 8px;
+}
+
+.stereo-frame .response-history strong {
+  font-size: 0.54rem;
+}
+
+.stereo-frame .response-history p {
+  margin-top: 2px;
+  font-size: 0.6rem;
+  line-height: 1.26;
+}
+
+.stereo-frame .tool-card {
+  top: 8px;
+  right: 8px;
+  width: min(168px, 24vw);
+  border-radius: 8px;
+  padding: 6px 7px;
+}
+
+.stereo-frame .tool-card strong,
+.stereo-frame .commerce-card strong {
+  font-size: 0.58rem;
+}
+
+.stereo-frame .tool-card span,
+.stereo-frame .commerce-card-kicker,
+.stereo-frame .commerce-source-disabled,
+.stereo-frame .commerce-actions > span,
+.stereo-frame .commerce-card p,
+.stereo-frame .commerce-card a {
+  font-size: 0.52rem;
+  line-height: 1.2;
+}
+
+.stereo-frame .bottom-bar {
+  grid-template-columns: auto auto minmax(84px, 1fr) auto;
+  min-height: 38px;
+  gap: 7px;
+  padding: 5px 48px 5px 10px;
+}
+
+.stereo-frame .play-button {
+  min-height: 27px;
+  padding: 0 10px;
+  font-size: 0.58rem;
+}
+
+.stereo-frame .timecode {
+  font-size: 0.58rem;
+}
+
+.stereo-frame .timeline {
+  height: 4px;
+}
+
+.stereo-frame .vera-dock {
+  right: 9px;
+  bottom: 8px;
+  width: 28px;
+}
+
+.stereo-frame .vera-orb {
+  width: 27px;
+}
+
+.stereo-frame .cart-panel {
+  left: 10px;
+  top: 48px;
+  width: min(240px, 34vw);
+  max-height: calc(100vh - 96px);
+  border-radius: 7px 3px 3px 7px;
+  padding: 7px 8px;
+}
+
+.stereo-frame .cart-panel header span,
+.stereo-frame .cart-panel header button,
+.stereo-frame .cart-item strong,
+.stereo-frame .cart-item span,
+.stereo-frame .cart-item em,
+.stereo-frame .cart-empty {
+  font-size: 0.52rem;
 }
 
 /* ── VR View ──────────────────────────────────────────────────────────────── */
