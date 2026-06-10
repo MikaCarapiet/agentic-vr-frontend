@@ -1855,17 +1855,17 @@ button {
 
 /* ── VR View ──────────────────────────────────────────────────────────────── */
 
+/* VR button sits right of Back */
 .vr-button {
   left: 86px;
 }
 
-.vr-overlay {
+/* VR background — first child of <main>, behind everything by DOM order */
+.vr-background {
   position: absolute;
   inset: 0;
-  z-index: 30;
-  background: #05050a;
-  touch-action: none;
-  user-select: none;
+  /* no z-index: painted first in DOM, everything else paints on top */
+  pointer-events: none; /* player receives all events */
 }
 
 .vr-canvas-mount {
@@ -1874,29 +1874,18 @@ button {
   overflow: hidden;
 }
 
-.vr-exit {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  padding: 8px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 24px;
-  background: rgba(8, 9, 12, 0.72);
-  backdrop-filter: blur(8px);
-  color: #f6f2e9;
-  font-size: 0.82rem;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  z-index: 31;
-  transition: background 0.18s;
+/* Subtle theater framing when VR is active */
+.vr-active .scene-video,
+.vr-active .scene-composition-layer,
+.vr-active .scene-vignette,
+.vr-active .ambient-field {
+  border-radius: 8px;
+  box-shadow: 0 0 80px rgba(127, 198, 255, 0.18);
 }
 
-.vr-exit:hover {
-  background: rgba(127, 198, 255, 0.18);
-}
-
+/* Enter-headset pill (only shown when WebXR is available) */
 .vr-enter-headset {
-  position: absolute;
+  position: fixed;
   bottom: 28px;
   left: 50%;
   transform: translateX(-50%);
@@ -1909,7 +1898,8 @@ button {
   font-size: 0.86rem;
   letter-spacing: 0.06em;
   cursor: pointer;
-  z-index: 31;
+  z-index: 40;
+  pointer-events: auto;
   transition: background 0.18s;
 }
 

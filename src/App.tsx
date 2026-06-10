@@ -1555,7 +1555,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
 
   return (
     <main
-      className={`experience mode-${mode} ${hudVisible ? "hud-visible" : "hud-idle"}`}
+      className={`experience mode-${mode} ${hudVisible ? "hud-visible" : "hud-idle"}${vrActive ? " vr-active" : ""}`}
       data-layer-id="app-root"
       data-layer-label="App root"
       onPointerMove={() => revealHud()}
@@ -1568,6 +1568,16 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         }
       }}
     >
+      {vrActive ? (
+        <React.Suspense fallback={null}>
+          <VRSceneView
+            videoRef={videoRef}
+            title={sceneVideo.title}
+            onExit={() => setVrActive(false)}
+          />
+        </React.Suspense>
+      ) : null}
+
       {isNativeVideo ? (
         <video
           ref={videoRef}
@@ -1641,17 +1651,17 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
       <button
         className={layerClass("home-button vr-button", "vr-button")}
         data-layer-id="vr-button"
-        data-layer-label="Enter VR view"
-        aria-label="Enter VR view"
+        data-layer-label={vrActive ? "Exit VR view" : "Enter VR view"}
+        aria-label={vrActive ? "Exit VR view" : "Enter VR view"}
         type="button"
         onClick={(event) => {
           event.stopPropagation();
           selectLayer("vr-button");
-          setVrActive(true);
+          setVrActive((v) => !v);
         }}
         onFocus={() => selectLayer("vr-button")}
       >
-        VR
+        {vrActive ? "Exit VR" : "VR"}
       </button>
 
       <div className="scene-vignette" />
@@ -2044,15 +2054,6 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         </div>
       </section>
 
-      {vrActive ? (
-        <React.Suspense fallback={null}>
-          <VRSceneView
-            videoRef={videoRef}
-            title={sceneVideo.title}
-            onExit={() => setVrActive(false)}
-          />
-        </React.Suspense>
-      ) : null}
 
     </main>
   );
