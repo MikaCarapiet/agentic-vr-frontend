@@ -770,7 +770,9 @@ button {
   min-height: 280px;
   width: clamp(300px, 28vw, 380px);
   max-height: calc(100vh - 176px);
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   pointer-events: auto;
 }
 
@@ -834,15 +836,12 @@ button {
 }
 
 .response-history p {
-  display: -webkit-box;
   margin: 3px 0 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
   color: rgba(255, 251, 243, 0.66);
   font-size: 0.74rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
-  -webkit-line-clamp: 3;
+  white-space: normal;
 }
 
 .tool-card {
@@ -1624,7 +1623,6 @@ button {
     margin-top: 2px;
     font-size: 0.6rem;
     line-height: 1.28;
-    -webkit-line-clamp: 3;
   }
 
   .caption-layer {
