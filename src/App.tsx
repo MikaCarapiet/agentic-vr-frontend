@@ -1728,24 +1728,6 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
             >
               {formatTime(duration)}
             </span>
-            <button
-              className={layerClass("stereo-button", "stereo-button")}
-              data-layer-id="stereo-button"
-              data-layer-label="Open stereo viewer"
-              onClick={(event) => {
-                event.stopPropagation();
-                selectLayer("stereo-button");
-                navigateTo(stereoVideoPath(sceneVideo.id));
-              }}
-              onFocus={() => selectLayer("stereo-button")}
-              aria-label="Open stereo viewer"
-              title="Open stereo viewer"
-            >
-              <span className="stereo-icon" aria-hidden="true">
-                <span />
-                <span />
-              </span>
-            </button>
           </>
         )}
       </footer>
@@ -1906,10 +1888,6 @@ function navigateTo(path: string, replace = false) {
 
 function videoPath(videoId: string) {
   return `/video/${encodeURIComponent(videoId)}`;
-}
-
-function stereoVideoPath(videoId: string) {
-  return `/stereo/video/${encodeURIComponent(videoId)}`;
 }
 
 export default function Root() {
