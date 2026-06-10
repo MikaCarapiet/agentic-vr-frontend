@@ -1064,7 +1064,20 @@ function SceneExperienceView({ video: sceneVideo, onExit }: AppProps) {
 
     let routerTrace: AgentTrace[] = [];
     let routedTargetAgentId = route.targetAgentId ?? activeAgentId;
-    if (route.kind === "character_chat") {
+    if (route.kind === "character_chat" && route.explicitTargetAgentId) {
+      routedTargetAgentId = route.explicitTargetAgentId;
+      setActiveAgentId(route.explicitTargetAgentId);
+      logAppEvent({
+        category: "router",
+        label: "character-router",
+        detail: "explicit character mention",
+        status: "done",
+        metadata: {
+          sceneId,
+          targetAgentId: route.explicitTargetAgentId,
+        },
+      });
+    } else if (route.kind === "character_chat") {
       const routerDecision = await routeCharacter(sceneId, utterance, routedTargetAgentId);
       if (routerDecision) {
         routedTargetAgentId = routerDecision.targetAgentId;

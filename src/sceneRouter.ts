@@ -19,6 +19,7 @@ export type FrontendRoute = {
   kind: FrontendRouteKind;
   intent: Intent;
   targetAgentId?: string;
+  explicitTargetAgentId?: string;
   action?: ChatResponse["action"];
   objectLabel?: string;
   response?: string;
@@ -84,7 +85,15 @@ function findMentionedAgent(text: string, agents: RouterAgent[]) {
   return agents.find((agent) => {
     const name = agent.name.toLowerCase();
     const role = agent.role.toLowerCase();
-    return new RegExp(`\\b${escapeRegExp(name)}\\b`, "i").test(text) || text.includes(role);
+    const nameTokens = name
+      .split(/\s+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 2 && !["the", "and"].includes(part));
+    return (
+      new RegExp(`\\b${escapeRegExp(name)}\\b`, "i").test(text) ||
+      nameTokens.some((part) => new RegExp(`\\b${escapeRegExp(part)}\\b`, "i").test(text)) ||
+      text.includes(role)
+    );
   });
 }
 
@@ -172,6 +181,7 @@ export function routeUtterance({
       kind: "character_chat",
       intent: "character_chat",
       targetAgentId: mentionedAgent.id,
+      explicitTargetAgentId: mentionedAgent.id,
       objectLabel: mentionedObject ?? undefined,
       tool: { label: "Router: character question", detail: mentionedAgent.name },
       agentTrace: trace(`routed to ${mentionedAgent.name}`),
