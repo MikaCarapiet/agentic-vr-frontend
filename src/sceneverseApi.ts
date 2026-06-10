@@ -238,6 +238,8 @@ const apiBaseUrl = (import.meta.env.VITE_SCENEVERSE_API_BASE_URL ?? "/backend").
 const apiTimeoutMs = 2400;
 const catalogueReadTimeoutMs = 15000;
 const sceneAnalysisTimeoutMs = 45000;
+const characterRouterTimeoutMs = 10000;
+const characterChatTimeoutMs = 30000;
 
 export function resolveBackendAssetUrl(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -701,7 +703,7 @@ export async function sendChat(request: ChatRequest): Promise<ChatResponse> {
       sceneId: request.sceneId,
       message: request.message,
       targetAgentId: request.targetAgentId,
-    });
+    }, characterChatTimeoutMs);
     if (backendResponse) {
       return {
         intent: inferIntentFromResponse(request, backendResponse),
@@ -728,7 +730,7 @@ export async function routeCharacter(
     sceneId,
     message,
     targetAgentId,
-  });
+  }, characterRouterTimeoutMs);
   if (!backendResponse) return null;
 
   return {
@@ -747,7 +749,7 @@ export async function sendCharacterChat(request: ChatRequest): Promise<ChatRespo
       sceneId: request.sceneId,
       message: request.message,
       characterId: request.targetAgentId,
-    });
+    }, characterChatTimeoutMs);
     if (backendResponse) {
       return {
         intent: "character_chat",
