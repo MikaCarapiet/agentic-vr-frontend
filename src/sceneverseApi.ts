@@ -118,7 +118,12 @@ export type SceneAnalysisRequest = {
   videoMetadata: {
     videoId?: string;
     title: string;
+    description?: string;
     source: string;
+    sourceLabel?: string;
+    sourceKind?: string;
+    agents?: string[];
+    thumbnailUrl?: string;
     duration: number;
   };
 };
@@ -140,6 +145,7 @@ export type ChatRequest = {
   sceneId: string | null;
   message: string;
   targetAgentId?: string;
+  targetAgentName?: string;
   playback: {
     currentTime: number;
     isPlaying: boolean;
@@ -367,6 +373,92 @@ async function postJson<TResponse>(
   }
 }
 
+async function postJsonOrThrow<TResponse>(
+  path: string,
+  payload: unknown,
+  timeoutMs = apiTimeoutMs,
+): Promise<TResponse> {
+  if (!apiBaseUrl) throw new Error("SceneVerse API base URL is not configured.");
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  const url = `${apiBaseUrl}${path}`;
+
+  try {
+    logVeraDebug("api request", { path, url, timeoutMs });
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: "request started",
+      status: "active",
+    });
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    logVeraDebug("api response", { path, status: response.status, ok: response.ok });
+
+    if (!response.ok) {
+      const detail = await readErrorDetail(response);
+      logAppEvent({
+        category: "api",
+        label: `POST ${path}`,
+        detail,
+        status: "error",
+      });
+      throw new Error(detail);
+    }
+
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail: "response received",
+      status: "done",
+    });
+    return (await response.json()) as TResponse;
+  } catch (error) {
+    const detail =
+      error instanceof DOMException && error.name === "AbortError"
+        ? "request timed out"
+        : error instanceof Error
+          ? error.message
+          : "request failed";
+    logVeraDebug("api error", {
+      path,
+      name: error instanceof Error ? error.name : "unknown",
+      message: detail,
+    });
+    logAppEvent({
+      category: "api",
+      label: `POST ${path}`,
+      detail,
+      status: "error",
+    });
+    throw error instanceof Error ? error : new Error(detail);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function readErrorDetail(response: Response) {
+  const fallback = `HTTP ${response.status}`;
+  try {
+    const payload = await response.json();
+    const detail = payload?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail.trim();
+    return JSON.stringify(payload);
+  } catch {
+    try {
+      const text = await response.text();
+      return text.trim() || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+}
+
 async function patchJson<TResponse>(
   path: string,
   payload: unknown,
@@ -517,6 +609,10 @@ export async function deleteVideo(videoId: string): Promise<DeleteVideoResponse 
 
 export async function downloadVideo(videoId: string): Promise<VideoAsset | null> {
   return postJson<VideoAsset>(`/api/admin/videos/${encodeURIComponent(videoId)}/download`, {}, 300_000);
+}
+
+export async function prepareVideoDownload(videoId: string): Promise<VideoAsset> {
+  return postJsonOrThrow<VideoAsset>(`/api/admin/videos/${encodeURIComponent(videoId)}/download`, {}, 300_000);
 }
 
 export async function uploadVideo(
@@ -692,6 +788,127 @@ function inferIntentFromResponse(request: ChatRequest, response: BackendChatResp
   return "fallback_clarify";
 }
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "scene-agent";
+}
+
+function looksLikeCharacterName(value: string) {
+  const lowered = value.trim().toLowerCase();
+  if (
+    [
+      "vera",
+      "director",
+      "scene",
+      "agent",
+      "scene agent",
+      "youtube",
+      "official",
+      "video",
+      "remaster",
+      "the",
+      "scene",
+      "duel",
+      "catalogue",
+      "linked",
+      "reference",
+    ].includes(lowered)
+  ) {
+    return false;
+  }
+  return /^[A-Z][A-Za-z']+(?:\s+[A-Z][A-Za-z']+)?$/.test(value.trim());
+}
+
+function uniqueNames(names: string[]) {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  names.forEach((name) => {
+    const cleaned = name.trim();
+    const key = cleaned.toLowerCase();
+    if (!cleaned || seen.has(key)) return;
+    seen.add(key);
+    unique.push(cleaned);
+  });
+  return unique;
+}
+
+function inferLocalCharacterNames(request: SceneAnalysisRequest) {
+  const agentNames = uniqueNames(
+    (request.videoMetadata.agents ?? []).filter((name) => looksLikeCharacterName(name)),
+  );
+  if (agentNames.length >= 2) return agentNames.slice(0, 4);
+
+  const text = [request.videoMetadata.description, request.videoMetadata.title].filter(Boolean).join(" ");
+  const names = [...agentNames];
+  const parentheticalSubjectPattern = /\b([A-Z][A-Za-z']{2,}(?:\s+[A-Z][A-Za-z']{2,}){0,2})\s*\(/g;
+  let match: RegExpExecArray | null;
+  while ((match = parentheticalSubjectPattern.exec(text)) !== null) {
+    const candidate = match[1]?.split(/\s+/).filter(looksLikeCharacterName).slice(0, 2).join(" ");
+    if (candidate) names.push(candidate);
+  }
+
+  const normalized = text.replace(/[^A-Za-z0-9' ]+/g, " ");
+  const tokenPattern = /\b[A-Z][A-Za-z']{2,}\b/g;
+  while ((match = tokenPattern.exec(normalized)) !== null) {
+    const candidate = match[0];
+    if (looksLikeCharacterName(candidate)) names.push(candidate);
+  }
+
+  return uniqueNames(names).slice(0, 4);
+}
+
+function localFallbackCharacters(request: SceneAnalysisRequest): CharacterAgent[] {
+  const names = inferLocalCharacterNames(request);
+  const resolvedNames = names.length ? names : ["Scene Guide"];
+  const sceneId = `scene-${Math.round(request.timestamp * 1000)}`;
+
+  return resolvedNames.map((name) => ({
+    id: `${sceneId}-${slugify(name)}`,
+    name,
+    role: "character inferred from catalogue metadata",
+    emotionalState: "focused on the paused scene",
+    personality: "scene-aware, responsive, grounded",
+    goals: ["answer from inside the referenced moment", "help the viewer explore scene stakes"],
+    knowledgeBoundaries: ["Only knows the catalogue metadata, supplied context, and visible scene cues."],
+    speakingStyle: "concise, cinematic, grounded",
+  }));
+}
+
+function localFallbackSceneAnalysis(request: SceneAnalysisRequest): SceneAnalysisResponse {
+  return {
+    sceneId: `scene-${Math.round(request.timestamp * 1000)}`,
+    sceneSummary: `${request.videoMetadata.title} is opened as an interactive SceneVerse moment. ${request.videoMetadata.description ?? "The viewer can question the scene and branch the next interaction from catalogue context."}`,
+    analysisMode: "local-fallback",
+    sourceModelId: null,
+    source: "local-fallback",
+    emotionalTone: "uncertain, exploratory, cinematic",
+    objects: ["catalogue frame", "scene setting", "character focus", "source reference"],
+    characters: localFallbackCharacters(request),
+    memorySummary: `The viewer entered ${request.videoMetadata.title} from the catalogue and can ask scene-grounded follow-ups.`,
+    agentTrace: [
+      { agent: "Vercel Frontend", step: "paused frame + timestamp prepared", status: "done" },
+      { agent: "Local Scene Fallback", step: "metadata-grounded scene initialized", status: "fallback" },
+      { agent: "Memory", step: "in-memory scene state initialized", status: "done" },
+      { agent: "Orchestrator", step: "agents ready for chat", status: "done" },
+    ],
+  };
+}
+
+function shouldPreferLocalMetadataFallback(
+  request: SceneAnalysisRequest,
+  backendResponse: BackendSceneAnalysisResponse,
+) {
+  if (request.frame || backendResponse.analysisMode !== "fallback") return false;
+  const localNames = inferLocalCharacterNames(request).map((name) => name.toLowerCase());
+  if (localNames.length === 0) return false;
+
+  const backendNames = backendResponse.characters.map((character) => character.name.toLowerCase());
+  return !localNames.some((name) => backendNames.some((backendName) => backendName.includes(name) || name.includes(backendName)));
+}
+
 export async function analyzeScene(
   request: SceneAnalysisRequest,
 ): Promise<SceneAnalysisResponse> {
@@ -702,10 +919,19 @@ export async function analyzeScene(
     videoMetadata: {
       videoId: request.videoMetadata.videoId,
       title: request.videoMetadata.title,
+      description: request.videoMetadata.description,
       source: request.videoMetadata.source,
+      sourceLabel: request.videoMetadata.sourceLabel,
+      sourceKind: request.videoMetadata.sourceKind,
+      agents: request.videoMetadata.agents,
+      thumbnailUrl: request.videoMetadata.thumbnailUrl,
     },
   }, sceneAnalysisTimeoutMs);
   if (backendResponse) {
+    if (shouldPreferLocalMetadataFallback(request, backendResponse)) {
+      return localFallbackSceneAnalysis(request);
+    }
+
     return {
       sceneId: backendResponse.sceneId,
       sceneSummary: backendResponse.sceneSummary,
@@ -720,56 +946,7 @@ export async function analyzeScene(
     };
   }
 
-  return {
-    sceneId: `scene-${Math.round(request.timestamp * 1000)}`,
-    sceneSummary:
-      "A mist-covered duel pauses at the moment two opposing forces face each other across the forest.",
-    analysisMode: "local-fallback",
-    sourceModelId: null,
-    source: "local-fallback",
-    emotionalTone: "ancient tension, restraint, threat",
-    objects: ["green blade", "masked armor", "mist", "forest crossing"],
-    characters: [
-      {
-        id: "mentor",
-        name: "Yoda",
-        role: "mentor",
-        emotionalState: "calm but burdened",
-        personality: "patient, cryptic, disciplined",
-        goals: ["understand the threat", "protect balance"],
-        knowledgeBoundaries: ["Only knows what can be inferred from this paused scene."],
-        speakingStyle: "short, reflective, indirect",
-      },
-      {
-        id: "shadow",
-        name: "Vader",
-        role: "antagonist",
-        emotionalState: "controlled fury",
-        personality: "dominant, severe, wounded",
-        goals: ["force submission", "test the opponent's resolve"],
-        knowledgeBoundaries: ["Only knows what can be inferred from this paused scene."],
-        speakingStyle: "terse, imposing, absolute",
-      },
-      {
-        id: "director",
-        name: "Director",
-        role: "story lens",
-        emotionalState: "observant",
-        personality: "analytical, cinematic, continuity-focused",
-        goals: ["explain scene meaning", "maintain story consistency"],
-        knowledgeBoundaries: ["Can use scene metadata and public context when routed by the orchestrator."],
-        speakingStyle: "clear, interpretive, concise",
-      },
-    ],
-    memorySummary:
-      "The viewer has entered a duel scene where Vader challenges Yoda's restraint and the blade functions as a symbol of choice.",
-    agentTrace: [
-      { agent: "Vercel Frontend", step: "paused frame + timestamp prepared", status: "done" },
-      { agent: "Local Scene Fallback", step: "backend analysis unavailable after extended wait", status: "fallback" },
-      { agent: "Memory", step: "in-memory scene state initialized", status: "done" },
-      { agent: "Orchestrator", step: "agents ready for chat", status: "done" },
-    ],
-  };
+  return localFallbackSceneAnalysis(request);
 }
 
 export async function sendChat(request: ChatRequest): Promise<ChatResponse> {
@@ -863,9 +1040,9 @@ export async function findCollectible(
   }
 
   return {
-    title: "Green lightsaber replica",
+    title: "Scene collectible",
     summary:
-      "A researched collectible match for the scene: a green-blade saber hilt inspired by Yoda's defensive, mentor-like role.",
+      "A placeholder collectible match for this scene. Connect Exa results to ground this in the current movie moment and visible objects.",
     sourceTitle: "Exa fallback preview",
     sourceUrl: "#",
     recommendedContext: "Use the Exa research source here once the backend research route is reachable.",
@@ -1021,7 +1198,7 @@ function mockChat(request: ChatRequest): ChatResponse {
     };
   }
 
-  if (/(yoda|blade|sword|force|feeling|why)/.test(text) || request.playback.mode === "in-scene") {
+  if (/(yoda|blade|sword|force|feeling|why)/.test(text) && !request.targetAgentName) {
     return {
       intent: "character_chat",
       respondingAgent: "Yoda",
@@ -1036,11 +1213,29 @@ function mockChat(request: ChatRequest): ChatResponse {
     };
   }
 
+  if (request.playback.mode === "in-scene" || request.targetAgentName) {
+    const respondingAgent = request.targetAgentName || "Scene Agent";
+    const targetAgentId = request.targetAgentId || slugify(respondingAgent);
+    return {
+      intent: "character_chat",
+      respondingAgent,
+      targetAgentId,
+      response:
+        "I can answer from this moment, but only from the scene context we have. Ask me about motive, risk, or what changes next.",
+      updatedMemorySummary: `${respondingAgent} answered from the active scene context.`,
+      agentTrace: [
+        ...traceBase,
+        { agent: "Memory", step: "conversation context loaded", status: "done" },
+        { agent: `${respondingAgent} Agent`, step: "metadata-grounded fallback response generated", status: "fallback" },
+      ],
+    };
+  }
+
   return {
     intent: "fallback_clarify",
     respondingAgent: "Vera",
     response:
-      "I can pause, rewind, fast forward, step into the scene, explain why Yoda’s lightsaber is green, or tell you where to buy the replica.",
+      "I can pause, rewind, fast forward, step into the scene, answer as a character, explain the scene, or help collect an item from the moment.",
     updatedMemorySummary: "Viewer received available command options.",
     agentTrace: [...traceBase, { agent: "Fallbacks", step: "safe command guidance returned", status: "fallback" }],
   };

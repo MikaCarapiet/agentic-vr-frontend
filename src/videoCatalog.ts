@@ -1,6 +1,7 @@
 import { resolveBackendAssetUrl, type VideoAsset } from "./sceneverseApi";
 
 export type CatalogVideoSourceKind = "interactive" | "linked" | "demo";
+export type CatalogVideoMediaKind = "html-video" | "youtube" | "reference";
 
 export type CatalogVideo = {
   id: string;
@@ -14,6 +15,8 @@ export type CatalogVideo = {
   playbackUrl: string;
   sourceLabel: string;
   sourceKind: CatalogVideoSourceKind;
+  mediaKind: CatalogVideoMediaKind;
+  embedUrl?: string;
   thumbnailUrl?: string;
   externalUrl?: string;
   playerPlayable: boolean;
@@ -32,12 +35,13 @@ export const FALLBACK_CATALOG_VIDEO: CatalogVideo = {
   playbackUrl: "/demo-duel.mp4",
   sourceLabel: "Bundled demo",
   sourceKind: "demo",
+  mediaKind: "html-video",
   playerPlayable: true,
 };
 
 const VIDEO_FILE_PATTERN = /\.(mp4|m4v|mov|webm|mkv)(?:[?#].*)?$/i;
 
-function getYouTubeVideoId(value: string | null | undefined) {
+export function getYouTubeVideoId(value: string | null | undefined) {
   const text = value?.trim();
   if (!text) return null;
 
@@ -71,6 +75,19 @@ function getYouTubeVideoId(value: string | null | undefined) {
 function getYouTubeThumbnailUrl(value: string | null | undefined) {
   const videoId = getYouTubeVideoId(value);
   return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : undefined;
+}
+
+export function getYouTubeEmbedUrl(value: string | null | undefined) {
+  const videoId = getYouTubeVideoId(value);
+  if (!videoId) return undefined;
+
+  const params = new URLSearchParams({
+    enablejsapi: "1",
+    playsinline: "1",
+    rel: "0",
+    modestbranding: "1",
+  });
+  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
 }
 
 function getSourceCandidate(asset: VideoAsset) {
@@ -110,6 +127,12 @@ export function catalogVideoFromAsset(asset: VideoAsset): CatalogVideo | null {
         : "External video";
 
   const thumbnailOverride = resolveBackendAssetUrl(asset.thumbnailUrl) ?? undefined;
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(asset.playbackUrl) ?? getYouTubeEmbedUrl(asset.originalUrl);
+  const mediaKind: CatalogVideoMediaKind = playerPlayable
+    ? "html-video"
+    : youtubeEmbedUrl
+      ? "youtube"
+      : "reference";
 
   return {
     id: asset.videoId,
@@ -126,10 +149,12 @@ export function catalogVideoFromAsset(asset: VideoAsset): CatalogVideo | null {
     agents: ["Vera", "Director", "Scene agent"],
     playbackUrl: playerPlayable ? resolvedSourceUrl : FALLBACK_CATALOG_VIDEO.playbackUrl,
     sourceLabel,
+    mediaKind,
+    embedUrl: youtubeEmbedUrl,
     thumbnailUrl: thumbnailOverride ?? getYouTubeThumbnailUrl(asset.originalUrl) ?? getYouTubeThumbnailUrl(asset.playbackUrl),
     externalUrl: playerPlayable ? undefined : resolvedSourceUrl,
     sourceKind: playerPlayable ? "interactive" : "linked",
-    playerPlayable,
+    playerPlayable: playerPlayable || Boolean(youtubeEmbedUrl),
   };
 }
 

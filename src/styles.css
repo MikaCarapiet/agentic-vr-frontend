@@ -34,13 +34,35 @@ body {
 .route-loading {
   display: grid;
   min-height: 100vh;
+  gap: 12px;
   place-items: center;
+  align-content: center;
   background:
     radial-gradient(circle at 50% 35%, rgba(127, 198, 255, 0.12), transparent 24rem),
     #050507;
   color: rgba(246, 242, 233, 0.72);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.route-loading p {
+  width: min(560px, calc(100vw - 48px));
+  margin: 0;
+  color: rgba(246, 242, 233, 0.56);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  text-align: center;
+  text-transform: none;
+}
+
+.route-loading button {
+  border: 1px solid rgba(127, 198, 255, 0.26);
+  border-radius: 999px;
+  padding: 10px 16px;
+  color: #050507;
+  background: #7fc6ff;
+  font-weight: 850;
 }
 
 button,
@@ -123,6 +145,73 @@ button {
   height: 100%;
   object-fit: cover;
   background: #050507;
+}
+
+.scene-video-frame {
+  border: 0;
+  object-fit: initial;
+  pointer-events: none;
+}
+
+.scene-reference-poster {
+  display: grid;
+  place-items: center;
+  padding: clamp(28px, 5vw, 72px);
+  overflow: hidden;
+  color: var(--text);
+}
+
+.scene-reference-poster > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.42;
+  filter: saturate(0.8);
+}
+
+.scene-reference-poster > div {
+  position: relative;
+  z-index: 1;
+  width: min(620px, 100%);
+  padding: 24px;
+  border: 1px solid rgba(127, 198, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(5, 7, 11, 0.72);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.45);
+}
+
+.scene-reference-poster span {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--blue);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.scene-reference-poster strong {
+  display: block;
+  font-size: clamp(1.8rem, 4vw, 3.4rem);
+  line-height: 0.98;
+}
+
+.scene-reference-poster p {
+  margin: 14px 0 18px;
+  color: rgba(246, 242, 233, 0.72);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.scene-reference-poster a {
+  color: #050507;
+  background: var(--blue);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 850;
+  text-decoration: none;
 }
 
 .home-button {

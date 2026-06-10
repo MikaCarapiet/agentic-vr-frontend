@@ -132,7 +132,26 @@ const yodaVaderClose: SceneComposition = {
 
 const genericComposition: SceneComposition = {
   id: "generic-scene",
-  characters: [],
+  characters: [
+    {
+      id: "primary-subject",
+      x: 38,
+      y: 58,
+      width: 26,
+      height: 54,
+      path: "M50 4 C62 6 70 18 70 34 C80 42 84 58 80 73 C76 87 65 96 50 98 C35 96 24 87 20 73 C16 58 20 42 30 34 C30 18 38 6 50 4 Z",
+      delay: 0.12,
+    },
+    {
+      id: "secondary-subject",
+      x: 64,
+      y: 60,
+      width: 24,
+      height: 50,
+      path: "M50 6 C61 7 69 17 70 31 C79 38 84 53 82 68 C79 84 66 95 50 98 C34 95 22 84 18 68 C16 53 21 38 30 31 C31 17 39 7 50 6 Z",
+      delay: 0.58,
+    },
+  ],
   flashLanes: [
     { id: "upper-left", x: 12, y: 32, width: 24, angle: -14, delay: 0 },
     { id: "upper-right", x: 70, y: 35, width: 22, angle: 16, delay: 0.85 },

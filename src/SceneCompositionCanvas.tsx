@@ -119,8 +119,7 @@ export default function SceneCompositionCanvas({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (!canvas || !video) return;
+    if (!canvas) return;
     const context = canvas.getContext("2d");
     if (!context) return;
 
@@ -137,13 +136,13 @@ export default function SceneCompositionCanvas({
 
     if (import.meta.env.DEV) {
       (window as typeof window & { __sceneVisionAnalyze?: unknown }).__sceneVisionAnalyze = () =>
-        analyzeVideoFrame(video);
+        (videoRef.current ? analyzeVideoFrame(videoRef.current) : null);
     }
 
     function runAnalysis(staggerIgnite: boolean) {
-      if (!video) return;
       const now = performance.now();
-      const result = video.readyState >= 2 ? analyzeVideoFrame(video) : null;
+      const activeVideo = videoRef.current;
+      const result = activeVideo && activeVideo.readyState >= 2 ? analyzeVideoFrame(activeVideo) : null;
       const rawSubjects =
         result && result.subjects.length > 0 ? result.subjects : fallbackSubjects(fallbackRef.current);
       state.usingFallback = !result || result.subjects.length === 0;
@@ -188,7 +187,8 @@ export default function SceneCompositionCanvas({
     const reanalyzeTimer =
       mode === "in-scene"
         ? window.setInterval(() => {
-            if ((!video.paused && !video.ended) || state.usingFallback) runAnalysis(true);
+            const activeVideo = videoRef.current;
+            if (!activeVideo || (!activeVideo.paused && !activeVideo.ended) || state.usingFallback) runAnalysis(true);
           }, REANALYZE_INTERVAL)
         : null;
 
@@ -225,12 +225,13 @@ export default function SceneCompositionCanvas({
     resizeCanvas();
 
     function coverRect() {
-      if (!canvas || !video || video.videoWidth === 0) {
+      const activeVideo = videoRef.current;
+      if (!canvas || !activeVideo || activeVideo.videoWidth === 0) {
         return { x: 0, y: 0, w: canvas?.width ?? 0, h: canvas?.height ?? 0 };
       }
-      const scale = Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
-      const w = video.videoWidth * scale;
-      const h = video.videoHeight * scale;
+      const scale = Math.max(canvas.width / activeVideo.videoWidth, canvas.height / activeVideo.videoHeight);
+      const w = activeVideo.videoWidth * scale;
+      const h = activeVideo.videoHeight * scale;
       return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
     }
 

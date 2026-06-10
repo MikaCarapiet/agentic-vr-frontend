@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   analyzeScene,
   createRealtimeTranscriptionToken,
+  downloadVideo,
   findCollectible,
   getVideo,
   listVideos,
+  prepareVideoDownload,
   routeCharacter,
   sendChat,
   sendCharacterChat,
@@ -76,9 +78,12 @@ const generationSteps: ToolEvent[] = [
 const controlPrompts = [
   "play the video",
   "pause the video",
+  "step into this scene",
   "rewind 10 seconds",
   "fast forward 20 seconds",
 ];
+
+const videoPreparationTimeoutMs = 45_000;
 
 const inSceneNavigationPrompts: InSceneCommand[] = [
   {
@@ -238,6 +243,7 @@ function App({ video: sceneVideo, onExit, presentationOnly = false }: AppProps) 
 
 function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = false }: AppProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const voiceInputRef = useRef<VoiceInputController | null>(null);
   const handleVoiceFinalRef = useRef<(utterance: string) => void>(() => {});
   const voiceEnabledRef = useRef(true);
@@ -310,6 +316,13 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     () => getSceneComposition(sceneVideo.id, currentTime, activeAgentId),
     [activeAgentId, currentTime, sceneVideo.id],
   );
+  const isNativeVideo = sceneVideo.mediaKind === "html-video";
+  const isYouTubeVideo = sceneVideo.mediaKind === "youtube" && Boolean(sceneVideo.embedUrl);
+  const youTubeEmbedUrl = useMemo(() => {
+    if (!sceneVideo.embedUrl) return "";
+    const separator = sceneVideo.embedUrl.includes("?") ? "&" : "?";
+    return `${sceneVideo.embedUrl}${separator}origin=${encodeURIComponent(window.location.origin)}`;
+  }, [sceneVideo.embedUrl]);
 
   function layerClass(baseClass: string, layerId: string) {
     return `${baseClass} layer-target ${selectedLayer === layerId ? "layer-selected" : ""}`;
@@ -317,6 +330,15 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
 
   function selectLayer(layerId: string) {
     setSelectedLayer(layerId);
+  }
+
+  function postYouTubeCommand(func: "playVideo" | "pauseVideo" | "seekTo", args: Array<number | boolean> = []) {
+    const iframeWindow = iframeRef.current?.contentWindow;
+    if (!iframeWindow) return false;
+
+    iframeWindow.postMessage(JSON.stringify({ event: "command", func, args }), "https://www.youtube-nocookie.com");
+    iframeWindow.postMessage(JSON.stringify({ event: "command", func, args }), "https://www.youtube.com");
+    return true;
   }
 
   function resolveCommandTargetAgent(command: InSceneCommand) {
@@ -364,6 +386,16 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   useEffect(() => {
     revealHud();
   }, []);
+
+  useEffect(() => {
+    if (isNativeVideo || !isPlaying) return;
+
+    const timer = window.setInterval(() => {
+      setCurrentTime((value) => value + 0.5);
+    }, 500);
+
+    return () => window.clearInterval(timer);
+  }, [isNativeVideo, isPlaying]);
 
   useEffect(() => {
     hudPinnedRef.current = hudPinned;
@@ -800,9 +832,27 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     return canvas.toDataURL("image/jpeg", 0.72);
   }
 
+  function buildSceneContextHint(frameCaptured: boolean) {
+    const contextParts = [
+      `Catalogue title: ${sceneVideo.title}.`,
+      `Catalogue description: ${sceneVideo.tagline}.`,
+      `Genre/source context: ${sceneVideo.genre}; ${sceneVideo.sourceLabel}.`,
+      sceneVideo.agents.length ? `Suggested visible agents: ${sceneVideo.agents.join(", ")}.` : "",
+      frameCaptured
+        ? "A paused frame is attached for visual grounding."
+        : "No same-origin video frame is available, so use catalogue metadata conservatively.",
+    ].filter(Boolean);
+
+    return contextParts.join(" ");
+  }
+
   async function runGeneration() {
     const video = videoRef.current;
-    video?.pause();
+    if (isNativeVideo) {
+      video?.pause();
+    } else if (isYouTubeVideo) {
+      postYouTubeCommand("pauseVideo");
+    }
     setIsPlaying(false);
     setMode("generating");
     setGenerationStep(0);
@@ -862,12 +912,16 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     const analysis = await analyzeScene({
       frame,
       timestamp: video?.currentTime ?? currentTime,
-      transcriptSegment:
-        "Two powerful figures face each other in a misted forest. A green blade glows between restraint and threat.",
+      transcriptSegment: buildSceneContextHint(Boolean(frame)),
       videoMetadata: {
         videoId: sceneVideo.id,
         title: sceneVideo.title,
+        description: sceneVideo.tagline,
         source: sceneVideo.playbackUrl,
+        sourceLabel: sceneVideo.sourceLabel,
+        sourceKind: sceneVideo.sourceKind,
+        agents: sceneVideo.agents,
+        thumbnailUrl: sceneVideo.thumbnailUrl,
         duration: duration || video?.duration || 0,
       },
     });
@@ -898,11 +952,17 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
       label: "Scene agents created",
       detail: analysis.characters.map((agent) => agent.name).join(", ") || "Director",
     });
-    speakResponse("The duel has opened. Speak, and the scene will answer.", "Director");
+    speakResponse("The scene has opened. Speak, and this moment will answer.", "Director");
   }
 
   async function playVideo() {
     const video = videoRef.current;
+    if (!isNativeVideo) {
+      if (!isYouTubeVideo || !postYouTubeCommand("playVideo")) return false;
+      setIsPlaying(true);
+      return true;
+    }
+
     if (!video) return false;
 
     if (video.ended) {
@@ -937,6 +997,12 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
 
   function pauseVideo() {
     const video = videoRef.current;
+    if (!isNativeVideo) {
+      if (isYouTubeVideo) postYouTubeCommand("pauseVideo");
+      setIsPlaying(false);
+      return true;
+    }
+
     if (!video) return false;
 
     video.pause();
@@ -947,6 +1013,14 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
   function seekVideo(nextTime: number) {
     const video = videoRef.current;
     const safeDuration = duration || video?.duration || 0;
+    if (!isNativeVideo) {
+      const targetTime = safeDuration > 0 ? Math.min(Math.max(nextTime, 0), safeDuration) : Math.max(nextTime, 0);
+      if (isYouTubeVideo) postYouTubeCommand("seekTo", [targetTime, true]);
+      setCurrentTime(targetTime);
+      revealHud();
+      return;
+    }
+
     if (!video || safeDuration <= 0) return;
 
     const targetTime = Math.min(Math.max(nextTime, 0), safeDuration);
@@ -975,12 +1049,13 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     logVeraDebug("video control requested", {
       action,
       actionSeconds: skipSeconds,
-      hasVideo: Boolean(video),
+      hasVideo: Boolean(video) || !isNativeVideo,
       paused: video?.paused,
       currentTime: video?.currentTime,
       muted: video?.muted,
+      mediaKind: sceneVideo.mediaKind,
     });
-    if (!video) return false;
+    if (isNativeVideo && !video) return false;
 
     if (action === "pause") {
       const paused = pauseVideo();
@@ -998,9 +1073,9 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
       const played = await playVideo();
       logVeraDebug("video play result", {
         played,
-        paused: video.paused,
-        currentTime: video.currentTime,
-        muted: video.muted,
+        paused: video?.paused,
+        currentTime: video?.currentTime ?? currentTime,
+        muted: video?.muted,
       });
       logAppEvent({ category: "playback", label: "Play", detail: played ? "video playing" : "playback blocked", status: played ? "done" : "error" });
       if (played) showTool({ label: "Tool: play video" });
@@ -1008,20 +1083,20 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
     }
 
     if (action === "rewind") {
-      video.currentTime = Math.max(0, video.currentTime - skipSeconds);
-      setCurrentTime(video.currentTime);
-      logAppEvent({ category: "playback", label: "Rewind", detail: `-${skipSeconds} seconds`, status: "done", metadata: { currentTime: video.currentTime } });
+      const nextTime = Math.max(0, (video?.currentTime ?? currentTime) - skipSeconds);
+      seekVideo(nextTime);
+      logAppEvent({ category: "playback", label: "Rewind", detail: `-${skipSeconds} seconds`, status: "done", metadata: { currentTime: nextTime } });
       showTool({ label: "Tool: rewind", detail: `-${skipSeconds} seconds` });
       return true;
     }
 
     if (action === "forward") {
-      video.currentTime = Math.min(
-        duration || video.duration || video.currentTime + skipSeconds,
-        video.currentTime + skipSeconds,
+      const nextTime = Math.min(
+        duration || video?.duration || currentTime + skipSeconds,
+        (video?.currentTime ?? currentTime) + skipSeconds,
       );
-      setCurrentTime(video.currentTime);
-      logAppEvent({ category: "playback", label: "Fast forward", detail: `+${skipSeconds} seconds`, status: "done", metadata: { currentTime: video.currentTime } });
+      seekVideo(nextTime);
+      logAppEvent({ category: "playback", label: "Fast forward", detail: `+${skipSeconds} seconds`, status: "done", metadata: { currentTime: nextTime } });
       showTool({ label: "Tool: fast forward", detail: `+${skipSeconds} seconds` });
       return true;
     }
@@ -1216,6 +1291,7 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
       sceneId,
       message: utterance,
       targetAgentId: routedTargetAgentId,
+      targetAgentName: agents.find((agent) => agent.id === routedTargetAgentId)?.name,
       playback: {
         currentTime,
         isPlaying,
@@ -1410,22 +1486,59 @@ function SceneExperienceView({ video: sceneVideo, onExit, presentationOnly = fal
         }
       }}
     >
-      <video
-        ref={videoRef}
-        className={layerClass("scene-video", "scene-video")}
-        data-layer-id="scene-video"
-        data-layer-label="Scene video"
-        aria-label={sceneVideo.title}
-        src={sceneVideo.playbackUrl}
-        playsInline
-        preload="metadata"
-        onClick={() => selectLayer("scene-video")}
-        onFocus={() => selectLayer("scene-video")}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
-      />
+      {isNativeVideo ? (
+        <video
+          ref={videoRef}
+          className={layerClass("scene-video", "scene-video")}
+          data-layer-id="scene-video"
+          data-layer-label="Scene video"
+          aria-label={sceneVideo.title}
+          src={sceneVideo.playbackUrl}
+          playsInline
+          preload="metadata"
+          onClick={() => selectLayer("scene-video")}
+          onFocus={() => selectLayer("scene-video")}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+        />
+      ) : isYouTubeVideo ? (
+        <iframe
+          ref={iframeRef}
+          className={layerClass("scene-video scene-video-frame", "scene-video")}
+          data-layer-id="scene-video"
+          data-layer-label="Scene video"
+          title={sceneVideo.title}
+          src={youTubeEmbedUrl}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+          onClick={() => selectLayer("scene-video")}
+          onFocus={() => selectLayer("scene-video")}
+        />
+      ) : (
+        <section
+          className={layerClass("scene-video scene-reference-poster", "scene-video")}
+          data-layer-id="scene-video"
+          data-layer-label="Scene reference"
+          aria-label={sceneVideo.title}
+          tabIndex={0}
+          onClick={() => selectLayer("scene-video")}
+          onFocus={() => selectLayer("scene-video")}
+        >
+          {sceneVideo.thumbnailUrl ? <img src={sceneVideo.thumbnailUrl} alt="" draggable={false} /> : null}
+          <div>
+            <span>{sceneVideo.sourceLabel}</span>
+            <strong>{sceneVideo.title}</strong>
+            <p>{sceneVideo.tagline}</p>
+            {sceneVideo.externalUrl ? (
+              <a href={sceneVideo.externalUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+                Open source
+              </a>
+            ) : null}
+          </div>
+        </section>
+      )}
 
       <button
         className={layerClass("home-button", "home-button")}
@@ -1890,16 +2003,47 @@ function videoPath(videoId: string) {
   return `/video/${encodeURIComponent(videoId)}`;
 }
 
+function formatVideoPrepareError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/sign in to confirm|not a bot|cookies/i.test(message)) {
+    return (
+      "YouTube blocked server download, so CineVerse cannot capture frames from this source yet. " +
+      "Configure backend YouTube cookies, upload the video, or use a direct MP4 source."
+    );
+  }
+
+  return message || "Could not prepare video for frame capture.";
+}
+
 export default function Root() {
   const [route, setRoute] = useState<AppRoute>(() => parseAppRoute());
   const [videos, setVideos] = useState<CatalogVideo[]>([FALLBACK_CATALOG_VIDEO]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [directVideo, setDirectVideo] = useState<CatalogVideo | null>(null);
   const [directVideoLoading, setDirectVideoLoading] = useState(false);
+  const [preparingVideoId, setPreparingVideoId] = useState<string | null>(null);
+  const [prepareError, setPrepareError] = useState<string | null>(null);
   const catalogLoadedRef = useRef(false);
   const activeRouteVideoId =
     route.name === "video" || route.name === "stereoVideo" ? route.videoId : null;
   const presentationOnly = new URLSearchParams(window.location.search).has("stereoFrame");
+  const prepareInFlightRef = useRef<string | null>(null);
+  const routeVideoCandidate =
+    activeRouteVideoId
+      ? videos.find((video) => video.id === activeRouteVideoId) ??
+        directVideo ??
+        (activeRouteVideoId === FALLBACK_CATALOG_VIDEO.id ? FALLBACK_CATALOG_VIDEO : null)
+      : null;
+
+  function upsertCatalogVideo(video: CatalogVideo) {
+    setVideos((current) => {
+      const existingIndex = current.findIndex((item) => item.id === video.id);
+      if (existingIndex < 0) return [current[0] ?? FALLBACK_CATALOG_VIDEO, video, ...current.slice(1)];
+
+      return current.map((item) => (item.id === video.id ? video : item));
+    });
+    setDirectVideo((current) => (current?.id === video.id ? video : current));
+  }
 
   useEffect(() => {
     const syncRoute = () => setRoute(parseAppRoute());
@@ -1952,6 +2096,9 @@ export default function Root() {
     if (!activeRouteVideoId) {
       setDirectVideo(null);
       setDirectVideoLoading(false);
+      setPreparingVideoId(null);
+      setPrepareError(null);
+      prepareInFlightRef.current = null;
       return;
     }
 
@@ -1987,6 +2134,92 @@ export default function Root() {
     };
   }, [activeRouteVideoId, videos]);
 
+  useEffect(() => {
+    if (route.name !== "video" || !routeVideoCandidate) return;
+    if (routeVideoCandidate.id === FALLBACK_CATALOG_VIDEO.id || routeVideoCandidate.mediaKind !== "youtube") {
+      if (preparingVideoId === routeVideoCandidate.id) setPreparingVideoId(null);
+      if (prepareInFlightRef.current === routeVideoCandidate.id) prepareInFlightRef.current = null;
+      return;
+    }
+    if (prepareInFlightRef.current === routeVideoCandidate.id || preparingVideoId === routeVideoCandidate.id || prepareError) return;
+
+    let cancelled = false;
+    prepareInFlightRef.current = routeVideoCandidate.id;
+    setPreparingVideoId(routeVideoCandidate.id);
+    setPrepareError(null);
+    logAppEvent({
+      category: "api",
+      label: `POST /api/admin/videos/${routeVideoCandidate.id}/download`,
+      detail: "preparing linked video for frame capture",
+      status: "active",
+    });
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled) return;
+      const detail =
+        "Video preparation timed out. The backend did not return a stored playback URL, so frame capture is not available yet.";
+      setPrepareError(detail);
+      setPreparingVideoId(null);
+      if (prepareInFlightRef.current === routeVideoCandidate.id) prepareInFlightRef.current = null;
+      logAppEvent({
+        category: "api",
+        label: `POST /api/admin/videos/${routeVideoCandidate.id}/download`,
+        detail,
+        status: "error",
+      });
+    }, videoPreparationTimeoutMs);
+
+    prepareVideoDownload(routeVideoCandidate.id)
+      .then(async (asset) => {
+        if (cancelled) return;
+        window.clearTimeout(timeoutId);
+        const resolvedAsset = asset ?? (await getVideo(routeVideoCandidate.id));
+        if (cancelled) return;
+        const preparedVideo = resolvedAsset ? catalogVideoFromAsset(resolvedAsset) : null;
+        if (!preparedVideo || preparedVideo.mediaKind !== "html-video") {
+          setPrepareError("Could not prepare a capturable video copy.");
+          logAppEvent({
+            category: "api",
+            label: `POST /api/admin/videos/${routeVideoCandidate.id}/download`,
+            detail: "download did not return a playable media URL",
+            status: "error",
+          });
+          return;
+        }
+
+        upsertCatalogVideo(preparedVideo);
+        logAppEvent({
+          category: "api",
+          label: `POST /api/admin/videos/${routeVideoCandidate.id}/download`,
+          detail: "stored playback URL ready for frame capture",
+          status: "done",
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        window.clearTimeout(timeoutId);
+        const detail = formatVideoPrepareError(error);
+        setPrepareError(detail);
+        logAppEvent({
+          category: "api",
+          label: `POST /api/admin/videos/${routeVideoCandidate.id}/download`,
+          detail,
+          status: "error",
+        });
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPreparingVideoId(null);
+          if (prepareInFlightRef.current === routeVideoCandidate.id) prepareInFlightRef.current = null;
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      if (prepareInFlightRef.current === routeVideoCandidate.id) prepareInFlightRef.current = null;
+    };
+  }, [prepareError, route.name, routeVideoCandidate?.id, routeVideoCandidate?.mediaKind]);
+
   if (route.name === "logs") {
     return <LogsPage />;
   }
@@ -2019,16 +2252,27 @@ export default function Root() {
     );
   }
 
-  const activeVideo = activeRouteVideoId
-    ? videos.find((video) => video.id === activeRouteVideoId) ??
-      directVideo ??
-      (activeRouteVideoId === FALLBACK_CATALOG_VIDEO.id ? FALLBACK_CATALOG_VIDEO : null)
-    : null;
+  const activeVideo = routeVideoCandidate;
 
   if (!activeVideo) {
     return (
       <main className="route-loading" aria-live="polite">
         <span>{directVideoLoading ? "Loading video..." : "Video unavailable"}</span>
+        <button type="button" onClick={() => navigateTo("/catalog")}>Back to catalog</button>
+      </main>
+    );
+  }
+
+  if (activeVideo.mediaKind === "youtube") {
+    return (
+      <main className="route-loading" aria-live="polite">
+        <span>{prepareError ? "Video preparation failed" : "Preparing interactive video..."}</span>
+        <p>
+          {prepareError ??
+            "Downloading and storing this source so CineVerse can capture frames from the movie scene. This can take a minute."}
+        </p>
+        {prepareError ? <button type="button" onClick={() => window.location.reload()}>Retry download</button> : null}
+        <button type="button" onClick={() => navigateTo("/catalog")}>Back to catalog</button>
       </main>
     );
   }
